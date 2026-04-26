@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { XCircle } from 'lucide-react'
 import { useDocumentStore, useMachineStore, useMaterialStore, useToolStore } from '@/stores'
 import type { CutConfig, ContourSide, OperationType, Shape } from '@/types'
 import { pathBBox } from '@/svg/parseSvg'
@@ -173,6 +174,14 @@ export default function ShapePanel() {
             Remove holes
           </button>
         )}
+        {shape.cutConfig && (
+          <button
+            onClick={() => updateShape(shape.id, { cutConfig: undefined })}
+            className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-xs text-gray-400 hover:text-red-300 hover:bg-red-900/20 border border-gray-700 hover:border-red-900 transition-colors"
+          >
+            <XCircle size={11} /> Clear operation
+          </button>
+        )}
       </PanelSection>
     )
   }
@@ -203,6 +212,8 @@ export default function ShapePanel() {
     })
   }
 
+  const anyHasOp = selected.some(s => s.cutConfig != null)
+
   return (
     <PanelSection title="Shape">
       <div className="text-[10px] text-gray-400 space-y-0.5">
@@ -216,6 +227,15 @@ export default function ShapePanel() {
       >
         Set as Nested Pocket
       </button>
+
+      {anyHasOp && (
+        <button
+          onClick={() => selected.forEach(s => updateShape(s.id, { cutConfig: undefined }))}
+          className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded border border-gray-700 hover:border-red-900 text-gray-400 hover:text-red-300 hover:bg-red-900/20 text-xs transition-colors"
+        >
+          <XCircle size={11} /> Clear operation ({selected.filter(s => s.cutConfig).length})
+        </button>
+      )}
 
       <div className="w-full h-px bg-gray-700" />
       <CutConfigEditor cfg={cfg} units={units} onChange={patchAll} />
