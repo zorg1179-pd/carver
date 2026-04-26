@@ -133,7 +133,6 @@ export default function CanvasStage() {
     }
     // Left click in draw mode
     if (e.evt.button === 0 && currentTool !== 'select') {
-      console.log('click')
       drawing.onPointerDown(getCanvasPt())
     }
   }
@@ -251,7 +250,11 @@ export default function CanvasStage() {
             if (e.key === 'Escape') drawing.commitText('')
             e.stopPropagation()
           }}
-          onBlur={(e) => drawing.commitText(e.target.value)}
+          onBlur={(e) => {
+            // Konva calls container.focus() on mouseup — ignore that focus steal
+            if (e.relatedTarget === stageRef.current?.container()) return
+            drawing.commitText(e.target.value)
+          }}
         />
       )}
 
