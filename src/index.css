@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* prevent scroll bounce on the editor canvas */
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
