@@ -20,6 +20,7 @@ export default function CanvasStage() {
 
   const [cursor, setCursor] = useState('crosshair')
   const [pointerPos, setPointerPos] = useState({ x: 0, y: 0 })
+  const textInputRef = useRef<HTMLInputElement>(null)
 
   const { bedWidth, bedHeight, units } = useMachineStore()
   const { selectedIds, setSelectedId, clearSelection, removeSelectedShapes } = useDocumentStore()
@@ -34,6 +35,18 @@ export default function CanvasStage() {
 
   const transformRef = useRef(transform)
   transformRef.current = transform
+
+  // ── Prevent Konva's container.focus() from stealing the text input's focus ───
+  // Konva calls container.focus() on pointer events. When the text input is
+  // visible, any time the Konva container gains focus we immediately take it back.
+  useEffect(() => {
+    if (!drawing.textState.visible) return
+    const container = stageRef.current?.container()
+    if (!container) return
+    const reclaim = () => textInputRef.current?.focus()
+    container.addEventListener('focus', reclaim)
+    return () => container.removeEventListener('focus', reclaim)
+  }, [drawing.textState.visible])
 
   // ── Resize observer ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -52,12 +65,12 @@ export default function CanvasStage() {
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       const inInput = e.target instanceof HTMLInputElement
+      if (inInput) return
       if (e.code === 'Space' && !e.repeat) {
         e.preventDefault()
         isSpaceDown.current = true
         setCursor('grab')
       }
-      if (inInput) return
       if (e.code === 'KeyF') {
         const el = containerRef.current
         if (el) fitToView(el.clientWidth, el.clientHeight - 28)
@@ -212,26 +225,34 @@ export default function CanvasStage() {
           <ToolpathLayer />
         </Stage>
 
-        {/* Text input overlay */}
-        {drawing.textState.visible && (
-          <input
-            autoFocus
-            placeholder="Type text…"
-            className="absolute bg-gray-900/80 border border-blue-400 text-white outline-none px-1 rounded min-w-[120px]"
-            style={{
-              left: textScreenPos.x,
-              top: textScreenPos.y,
-              fontSize: Math.max(11, 10 * transform.scale),
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') drawing.commitText(e.currentTarget.value)
-              if (e.key === 'Escape') drawing.commitText('')
-              e.stopPropagation()
-            }}
-            onBlur={(e) => drawing.commitText(e.target.value)}
-          />
-        )}
       </div>
+
+      {/* Text input overlay — lives outside overflow-hidden so it's never clipped */}
+      {drawing.textState.visible && (
+        <input
+          ref={textInputRef}
+          autoFocus
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="Type text…"
+          className="absolute z-10 bg-gray-900/80 border border-blue-400 text-white outline-none px-1 rounded min-w-[120px]"
+          style={{
+            left: textScreenPos.x,
+            top: textScreenPos.y,
+            fontSize: Math.max(11, 10 * transform.scale),
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const val = e.currentTarget.value
+              drawing.commitText(val)
+              if (val.trim()) setCurrentTool('select')
+            }
+            if (e.key === 'Escape') drawing.commitText('')
+            e.stopPropagation()
+          }}
+          onBlur={(e) => drawing.commitText(e.target.value)}
+        />
+      )}
 
       {/* Toolpath animation controls */}
       {showToolpaths && toolpaths.length > 0 && (
