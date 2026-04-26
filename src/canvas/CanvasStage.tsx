@@ -37,16 +37,16 @@ export default function CanvasStage() {
   transformRef.current = transform
 
   // ── Prevent Konva's container.focus() from stealing the text input's focus ───
-  // Konva calls container.focus() on pointer events. When the text input is
-  // visible, any time the Konva container gains focus we immediately take it back.
+  // Konva calls container.focus() on mouseup — a separate browser task from
+  // mousedown. Attaching the listener on mount (not conditionally) ensures it's
+  // already present when the very first click opens the text input.
   useEffect(() => {
-    if (!drawing.textState.visible) return
     const container = stageRef.current?.container()
     if (!container) return
     const reclaim = () => textInputRef.current?.focus()
     container.addEventListener('focus', reclaim)
     return () => container.removeEventListener('focus', reclaim)
-  }, [drawing.textState.visible])
+  }, [])
 
   // ── Resize observer ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -133,6 +133,7 @@ export default function CanvasStage() {
     }
     // Left click in draw mode
     if (e.evt.button === 0 && currentTool !== 'select') {
+      console.log('click')
       drawing.onPointerDown(getCanvasPt())
     }
   }
