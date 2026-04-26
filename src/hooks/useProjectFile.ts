@@ -11,7 +11,7 @@ export function useProjectFile() {
   const machine  = useMachineStore()
   const material = useMaterialStore()
   const tool     = useToolStore()
-  const { shapes, clearShapes, addShape } = useDocumentStore()
+  const { shapes, setShapes } = useDocumentStore()
   const clearToolpaths  = useToolpathStore(s => s.clear)
   const resetAnimation  = useUIStore(s => s.resetToolpathAnimation)
 
@@ -62,8 +62,7 @@ export function useProjectFile() {
     tool.setPlungeRate(t.plungeRate)
     tool.setMaxDepthPerPass(t.maxDepthPerPass)
 
-    clearShapes()
-    project.shapes.forEach(s => addShape(s))
+    setShapes(project.shapes)
     clearToolpaths()
     resetAnimation()
   }

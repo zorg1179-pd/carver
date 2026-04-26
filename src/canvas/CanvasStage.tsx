@@ -71,7 +71,7 @@ export default function CanvasStage() {
   const textInputRef = useRef<HTMLInputElement>(null)
 
   const { bedWidth, bedHeight, units } = useMachineStore()
-  const { shapes, selectedIds, setSelectedId, setSelectedIds, clearSelection, removeSelectedShapes } = useDocumentStore()
+  const { shapes, selectedIds, setSelectedId, setSelectedIds, clearSelection, removeSelectedShapes, undo, redo } = useDocumentStore()
   const { toolpaths } = useToolpathStore()
   const {
     currentTool, setCurrentTool,
@@ -132,6 +132,14 @@ export default function CanvasStage() {
       if ((e.code === 'Delete' || e.code === 'Backspace') && selectedIds.length > 0) {
         removeSelectedShapes()
       }
+      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey))) {
+        e.preventDefault()
+        redo()
+      }
     }
     const onUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
@@ -145,7 +153,7 @@ export default function CanvasStage() {
       window.removeEventListener('keydown', onDown)
       window.removeEventListener('keyup', onUp)
     }
-  }, [fitToView, selectedIds, drawing, setSelectedId, clearSelection, setCurrentTool, removeSelectedShapes])
+  }, [fitToView, selectedIds, drawing, setSelectedId, clearSelection, setCurrentTool, removeSelectedShapes, undo, redo])
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
   const getCanvasPt = () => {

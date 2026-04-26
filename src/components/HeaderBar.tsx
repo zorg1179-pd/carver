@@ -1,5 +1,6 @@
 import { useRef } from 'react'
-import { FilePlus, FolderOpen, Save, AlertCircle } from 'lucide-react'
+import { FilePlus, FolderOpen, Save, AlertCircle, Undo2, Redo2 } from 'lucide-react'
+import { useDocumentStore } from '@/stores'
 
 interface Props {
   isDirty: boolean
@@ -14,6 +15,7 @@ export default function HeaderBar({
   isDirty, lastSavedAt, loadError, onNew, onSaveToFile, onLoadFromFile,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { past, future, undo, redo } = useDocumentStore()
 
   const statusText = isDirty
     ? 'Saving…'
@@ -59,6 +61,25 @@ export default function HeaderBar({
         className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
       >
         <Save size={12} /> Save
+      </button>
+
+      <div className="w-px h-4 bg-gray-700 mx-1" />
+
+      <button
+        onClick={undo}
+        disabled={past.length === 0}
+        title="Undo  (Ctrl+Z)"
+        className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-gray-400 hover:text-white hover:bg-gray-800 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+      >
+        <Undo2 size={12} /> Undo
+      </button>
+      <button
+        onClick={redo}
+        disabled={future.length === 0}
+        title="Redo  (Ctrl+Y)"
+        className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-gray-400 hover:text-white hover:bg-gray-800 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+      >
+        <Redo2 size={12} /> Redo
       </button>
 
       <div className="ml-auto flex items-center gap-2 text-[10px]">
