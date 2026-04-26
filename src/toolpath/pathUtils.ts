@@ -6,7 +6,18 @@ const K = 0.5522847498  // kappa for cubic bezier circle approximation
 // ── Shape → SVG path data ─────────────────────────────────────────────────
 export function shapeToPathData(shape: Shape): string | null {
   switch (shape.type) {
-    case 'path': return shape.data
+    case 'path': {
+      const { data, x = 0, y = 0, scaleX = 1, scaleY = 1 } = shape
+      // Apply the shape's positional transform so toolpath coords match the canvas.
+      // Other shape types bake x/y into their path strings; path shapes delegate
+      // rendering to Konva's element-level props, so we must do it explicitly here.
+      if (x === 0 && y === 0 && scaleX === 1 && scaleY === 1) return data
+      return new SVGPathData(data)
+        .transform(SVGPathDataTransformer.TO_ABS())
+        .transform(SVGPathDataTransformer.NORMALIZE_HVZ())
+        .transform(SVGPathDataTransformer.MATRIX(scaleX, 0, 0, scaleY, x, y))
+        .encode()
+    }
     case 'line': {
       const p = shape.points
       if (p.length < 4) return null
