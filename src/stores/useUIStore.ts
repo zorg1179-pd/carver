@@ -3,6 +3,17 @@ import { create } from 'zustand'
 export type ToolType = 'select' | 'line' | 'rect' | 'circle' | 'text'
 export type SimSpeed = 'slow' | 'normal' | 'fast'
 
+export const TEXT_FONTS = [
+  'Arial',
+  'Arial Black',
+  'Courier New',
+  'Georgia',
+  'Impact',
+  'Times New Roman',
+  'Trebuchet MS',
+  'Verdana',
+] as const
+
 interface UIState {
   currentTool: ToolType
   setCurrentTool: (t: ToolType) => void
@@ -22,6 +33,12 @@ interface UIState {
   /** Incrementing this token resets the animation to the start. */
   toolpathResetToken: number
   resetToolpathAnimation: () => void
+
+  /** Text tool font settings. */
+  textFont: string
+  setTextFont: (f: string) => void
+  textFontSize: number
+  setTextFontSize: (s: number) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -40,4 +57,9 @@ export const useUIStore = create<UIState>((set) => ({
   toolpathResetToken: 0,
   resetToolpathAnimation: () =>
     set((s) => ({ toolpathResetToken: s.toolpathResetToken + 1, toolpathPlaying: false })),
+
+  textFont: 'Arial',
+  setTextFont: (textFont) => set({ textFont }),
+  textFontSize: 10,
+  setTextFontSize: (textFontSize) => set({ textFontSize }),
 }))

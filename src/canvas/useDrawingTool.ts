@@ -8,7 +8,7 @@ export interface Point { x: number; y: number }
 const DEFAULT_STYLE = { stroke: '#e2e8f0', fill: 'transparent', strokeWidth: 0.5 }
 
 export function useDrawingTool() {
-  const { currentTool } = useUIStore()
+  const { currentTool, textFont, textFontSize } = useUIStore()
   const { addShape, setSelectedId } = useDocumentStore()
 
   const [previewShape, setPreviewShape] = useState<Shape | null>(null)
@@ -126,14 +126,16 @@ export function useDrawingTool() {
       const shape: TextShape = {
         id: crypto.randomUUID(), type: 'text',
         x: textState.canvasX, y: textState.canvasY,
-        text: text.trim(), fontSize: 10, fontFamily: 'Arial',
+        text: text.trim(),
+        fontSize: textFontSize,
+        fontFamily: textFont,
         style: DEFAULT_STYLE,
       }
       addShape(shape)
       setSelectedId(shape.id)
     }
     setTextState({ visible: false, canvasX: 0, canvasY: 0 })
-  }, [textState, addShape, setSelectedId])
+  }, [textState, textFont, textFontSize, addShape, setSelectedId])
 
   return {
     previewShape,

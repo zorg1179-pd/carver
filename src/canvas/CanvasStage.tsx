@@ -6,7 +6,7 @@ import DrawingLayer from './DrawingLayer'
 import ToolpathLayer from './ToolpathLayer'
 import { useDrawingTool } from './useDrawingTool'
 import { useMachineStore, useDocumentStore, useToolpathStore } from '@/stores'
-import { useUIStore } from '@/stores/useUIStore'
+import { useUIStore, TEXT_FONTS } from '@/stores/useUIStore'
 import { useCanvasTransform } from '@/hooks/useCanvasTransform'
 
 export default function CanvasStage() {
@@ -29,6 +29,7 @@ export default function CanvasStage() {
     currentTool, setCurrentTool,
     showToolpaths, toolpathPlaying, toolpathSpeed,
     setToolpathPlaying, setToolpathSpeed, resetToolpathAnimation,
+    textFont, setTextFont, textFontSize, setTextFontSize,
   } = useUIStore()
   const { transform, setTransform, fitToView } = useCanvasTransform(bedWidth, bedHeight)
   const drawing = useDrawingTool()
@@ -201,6 +202,35 @@ export default function CanvasStage() {
 
   return (
     <div ref={containerRef} className="w-full h-full relative bg-gray-950 flex flex-col" style={{ cursor }}>
+
+      {/* Text tool options bar */}
+      {currentTool === 'text' && (
+        <div className="absolute top-0 inset-x-0 z-10 h-8 bg-gray-900/95 border-b border-gray-700 flex items-center gap-2 px-3 pointer-events-auto select-none">
+          <span className="text-gray-500 text-[10px] uppercase tracking-wider mr-1">Font</span>
+          <select
+            value={textFont}
+            onChange={(e) => setTextFont(e.target.value)}
+            className="bg-gray-800 border border-gray-600 rounded px-1.5 py-0.5 text-white text-xs focus:outline-none focus:border-blue-500"
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            {TEXT_FONTS.map((f) => (
+              <option key={f} value={f}>{f}</option>
+            ))}
+          </select>
+          <span className="text-gray-500 text-[10px] uppercase tracking-wider ml-1">Size</span>
+          <input
+            type="number"
+            min={1}
+            max={500}
+            value={textFontSize}
+            onChange={(e) => setTextFontSize(Math.max(1, Number(e.target.value)))}
+            className="w-16 bg-gray-800 border border-gray-600 rounded px-1.5 py-0.5 text-white text-xs focus:outline-none focus:border-blue-500"
+            onKeyDown={(e) => e.stopPropagation()}
+          />
+          <span className="text-gray-500 text-xs">{units}</span>
+        </div>
+      )}
+
       <div className="flex-1 overflow-hidden">
         <Stage
           ref={stageRef}
@@ -239,7 +269,8 @@ export default function CanvasStage() {
           style={{
             left: textScreenPos.x,
             top: textScreenPos.y,
-            fontSize: Math.max(11, 10 * transform.scale),
+            fontSize: Math.max(11, textFontSize * transform.scale),
+            fontFamily: textFont,
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
