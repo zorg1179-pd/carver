@@ -10,6 +10,8 @@ interface DocumentState {
   removeSelectedShapes: () => void
   /** Replace selection with a single shape (or clear if null). */
   setSelectedId: (id: string | null) => void
+  /** Replace the entire selection with the given set of IDs. */
+  setSelectedIds: (ids: string[]) => void
   /** Toggle a shape in/out of the current multi-selection. */
   addToSelection: (id: string) => void
   clearSelection: () => void
@@ -44,6 +46,9 @@ export const useDocumentStore = create<DocumentState>((set) => ({
 
   setSelectedId: (id) =>
     set({ selectedIds: id ? [id] : [] }),
+
+  setSelectedIds: (ids) =>
+    set({ selectedIds: ids }),
 
   addToSelection: (id) =>
     set((state) => ({

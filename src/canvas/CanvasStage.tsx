@@ -8,6 +8,50 @@ import { useDrawingTool } from './useDrawingTool'
 import { useMachineStore, useDocumentStore, useToolpathStore } from '@/stores'
 import { useUIStore, TEXT_FONTS } from '@/stores/useUIStore'
 import { useCanvasTransform } from '@/hooks/useCanvasTransform'
+import type {
+  Shape, LineShape, RectShape, CircleShape, EllipseShape, TextShape, PathShape,
+} from '@/types'
+
+type BBox = { x1: number; y1: number; x2: number; y2: number }
+
+function getShapeBBox(shape: Shape): BBox | null {
+  if (shape.type === 'line') {
+    const s = shape as LineShape
+    const xs = s.points.filter((_, i) => i % 2 === 0)
+    const ys = s.points.filter((_, i) => i % 2 !== 0)
+    return { x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) }
+  }
+  if (shape.type === 'rect') {
+    const s = shape as RectShape
+    return { x1: s.x, y1: s.y, x2: s.x + s.width, y2: s.y + s.height }
+  }
+  if (shape.type === 'circle') {
+    const s = shape as CircleShape
+    return { x1: s.x - s.radius, y1: s.y - s.radius, x2: s.x + s.radius, y2: s.y + s.radius }
+  }
+  if (shape.type === 'ellipse') {
+    const s = shape as EllipseShape
+    return { x1: s.x - s.radiusX, y1: s.y - s.radiusY, x2: s.x + s.radiusX, y2: s.y + s.radiusY }
+  }
+  if (shape.type === 'text') {
+    const s = shape as TextShape
+    return { x1: s.x, y1: s.y - s.fontSize, x2: s.x + s.text.length * s.fontSize * 0.6, y2: s.y }
+  }
+  if (shape.type === 'path') {
+    const s = shape as PathShape
+    const nums = s.data.match(/-?[\d.]+/g)?.map(Number)
+    if (!nums || nums.length < 2) return null
+    const ox = s.x ?? 0, oy = s.y ?? 0, sx = s.scaleX ?? 1, sy = s.scaleY ?? 1
+    const xs = nums.filter((_, i) => i % 2 === 0).map((v) => ox + v * sx)
+    const ys = nums.filter((_, i) => i % 2 !== 0).map((v) => oy + v * sy)
+    return { x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) }
+  }
+  return null
+}
+
+function bboxIntersects(sel: BBox, bbox: BBox): boolean {
+  return sel.x1 < bbox.x2 && sel.x2 > bbox.x1 && sel.y1 < bbox.y2 && sel.y2 > bbox.y1
+}
 
 export default function CanvasStage() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -18,12 +62,16 @@ export default function CanvasStage() {
   const lastPtr = useRef({ x: 0, y: 0 })
   const isSpaceDown = useRef(false)
 
+  const isDragSelecting = useRef(false)
+  const dragSelectOrigin = useRef({ x: 0, y: 0 })
+  const [dragRect, setDragRect] = useState<BBox | null>(null)
+
   const [cursor, setCursor] = useState('crosshair')
   const [pointerPos, setPointerPos] = useState({ x: 0, y: 0 })
   const textInputRef = useRef<HTMLInputElement>(null)
 
   const { bedWidth, bedHeight, units } = useMachineStore()
-  const { selectedIds, setSelectedId, clearSelection, removeSelectedShapes } = useDocumentStore()
+  const { shapes, selectedIds, setSelectedId, setSelectedIds, clearSelection, removeSelectedShapes } = useDocumentStore()
   const { toolpaths } = useToolpathStore()
   const {
     currentTool, setCurrentTool,
@@ -135,6 +183,14 @@ export default function CanvasStage() {
     // Left click in draw mode
     if (e.evt.button === 0 && currentTool !== 'select') {
       drawing.onPointerDown(getCanvasPt())
+      return
+    }
+    // Left click on empty canvas in select mode → start drag select
+    if (e.evt.button === 0 && currentTool === 'select' && e.target === stageRef.current) {
+      const pt = getCanvasPt()
+      isDragSelecting.current = true
+      dragSelectOrigin.current = pt
+      setDragRect({ x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y })
     }
   }
 
@@ -144,6 +200,11 @@ export default function CanvasStage() {
       const dy = e.evt.clientY - lastPtr.current.y
       lastPtr.current = { x: e.evt.clientX, y: e.evt.clientY }
       setTransform((t) => ({ ...t, x: t.x + dx, y: t.y + dy }))
+    }
+    if (isDragSelecting.current) {
+      const pt = getCanvasPt()
+      const o = dragSelectOrigin.current
+      setDragRect({ x1: o.x, y1: o.y, x2: pt.x, y2: pt.y })
     }
     if (currentTool !== 'select') {
       drawing.onPointerMove(getCanvasPt())
@@ -167,6 +228,26 @@ export default function CanvasStage() {
       isPanning.current = false
       setCursor(isSpaceDown.current ? 'grab' : 'crosshair')
     }
+    if (isDragSelecting.current) {
+      isDragSelecting.current = false
+      if (dragRect) {
+        const sel: BBox = {
+          x1: Math.min(dragRect.x1, dragRect.x2),
+          y1: Math.min(dragRect.y1, dragRect.y2),
+          x2: Math.max(dragRect.x1, dragRect.x2),
+          y2: Math.max(dragRect.y1, dragRect.y2),
+        }
+        // Only apply if the user dragged a meaningful distance (not just a click)
+        if (sel.x2 - sel.x1 > 1 || sel.y2 - sel.y1 > 1) {
+          const hitIds = shapes
+            .filter((s) => { const bb = getShapeBBox(s); return bb && bboxIntersects(sel, bb) })
+            .map((s) => s.id)
+          if (hitIds.length > 0) setSelectedIds(hitIds)
+          else clearSelection()
+        }
+      }
+      setDragRect(null)
+    }
     if (e.evt.button === 0 && currentTool !== 'select') {
       drawing.onPointerUp(getCanvasPt())
     }
@@ -176,6 +257,10 @@ export default function CanvasStage() {
     if (isPanning.current) {
       isPanning.current = false
       setCursor(isSpaceDown.current ? 'grab' : 'crosshair')
+    }
+    if (isDragSelecting.current) {
+      isDragSelecting.current = false
+      setDragRect(null)
     }
   }
 
@@ -256,6 +341,19 @@ export default function CanvasStage() {
         </Stage>
 
       </div>
+
+      {/* Drag-select rubber-band rect */}
+      {dragRect && (
+        <div
+          className="absolute pointer-events-none border border-blue-400 bg-blue-400/10 z-10"
+          style={{
+            left: Math.min(dragRect.x1, dragRect.x2) * transform.scale + transform.x,
+            top:  Math.min(dragRect.y1, dragRect.y2) * transform.scale + transform.y,
+            width:  Math.abs(dragRect.x2 - dragRect.x1) * transform.scale,
+            height: Math.abs(dragRect.y2 - dragRect.y1) * transform.scale,
+          }}
+        />
+      )}
 
       {/* Text input overlay — lives outside overflow-hidden so it's never clipped */}
       {drawing.textState.visible && (
