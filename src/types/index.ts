@@ -116,3 +116,32 @@ export interface Toolpath {
   operation: OperationType
   moves: Move[]
 }
+
+// ── Tool & material library ───────────────────────────────────────────────────
+
+export interface ToolProfile {
+  id: string
+  name: string
+  bitType: BitType
+  diameter: number
+  vBitAngle: number
+  spindleRpm: number
+  feedRate: number
+  plungeRate: number
+  maxDepthPerPass: number
+}
+
+export interface MaterialFeeds {
+  feedRate: number
+  plungeRate: number
+  maxDepthPerPass: number
+  spindleRpm: number
+}
+
+export interface MaterialPreset {
+  id: string
+  name: string
+  defaultThickness: number
+  isBuiltIn: boolean
+  feeds: Partial<Record<BitType, MaterialFeeds>>
+}
