@@ -39,6 +39,16 @@ interface UIState {
   setTextFont: (f: string) => void
   textFontSize: number
   setTextFontSize: (s: number) => void
+
+  /** Grid snap. */
+  snapEnabled: boolean
+  setSnapEnabled: (v: boolean) => void
+  snapGridSize: number
+  setSnapGridSize: (v: number) => void
+
+  /** Node editor — ID of the shape whose vertices are being edited, or null. */
+  nodeEditShapeId: string | null
+  setNodeEditShapeId: (id: string | null) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -62,4 +72,12 @@ export const useUIStore = create<UIState>((set) => ({
   setTextFont: (textFont) => set({ textFont }),
   textFontSize: 10,
   setTextFontSize: (textFontSize) => set({ textFontSize }),
+
+  snapEnabled: false,
+  setSnapEnabled: (snapEnabled) => set({ snapEnabled }),
+  snapGridSize: 10,
+  setSnapGridSize: (snapGridSize) => set({ snapGridSize }),
+
+  nodeEditShapeId: null,
+  setNodeEditShapeId: (nodeEditShapeId) => set({ nodeEditShapeId }),
 }))

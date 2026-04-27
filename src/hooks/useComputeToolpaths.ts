@@ -21,6 +21,9 @@ export function useComputeToolpaths() {
           { stockSurfaceZ },
         )
         setToolpaths(tps)
+      } catch (err) {
+        console.error('[carver] toolpath computation failed:', err)
+        setToolpaths([])
       } finally {
         setIsComputing(false)
       }

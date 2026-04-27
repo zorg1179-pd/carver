@@ -13,6 +13,14 @@ export interface CutConfig {
   contourSide?: ContourSide
   pocketStepover?: number    // fraction: 0.0–1.0
   holeShapeIds?: string[]    // nested pocket: shape IDs that define inner holes
+  // V-carve
+  vFlatDepth?: number        // max V-carve depth; regions beyond switch to flat relief
+  // Dogbone corners (contour / pocket cleanup pass)
+  dogbone?: boolean
+  // Holding tabs (contour only)
+  tabCount?: number          // 0 = no tabs
+  tabWidth?: number          // tab width in document units
+  tabHeight?: number         // material thickness left at tab, measured from stock surface
 }
 
 export type ShapeType = 'line' | 'rect' | 'circle' | 'ellipse' | 'text' | 'path'

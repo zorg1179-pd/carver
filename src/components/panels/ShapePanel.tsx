@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
-import { XCircle } from 'lucide-react'
+import { XCircle, FlipHorizontal, FlipVertical } from 'lucide-react'
 import { useDocumentStore, useMachineStore, useMaterialStore, useToolStore } from '@/stores'
-import type { CutConfig, ContourSide, OperationType, Shape } from '@/types'
+import type { CutConfig, ContourSide, OperationType, Shape, ShapeUpdate } from '@/types'
 import { pathBBox } from '@/svg/parseSvg'
 import NumberField from '@/components/ui/NumberField'
 import SelectField from '@/components/ui/SelectField'
@@ -56,6 +56,77 @@ const SIDE_OPTIONS: { value: ContourSide; label: string }[] = [
   { value: 'on-line', label: 'On line' },
 ]
 
+// ── Transform editor (single-select only) ─────────────────────────────────
+interface TransformProps { shape: Shape; units: string; onChange: (u: ShapeUpdate) => void }
+
+function TransformEditor({ shape, units: u, onChange }: TransformProps) {
+  const btnCls = 'flex-1 flex items-center justify-center gap-1 py-1 rounded border border-gray-600 text-gray-400 hover:text-white hover:border-gray-400 text-[10px] transition-colors'
+
+  if (shape.type === 'rect') return (
+    <>
+      <div className="grid grid-cols-2 gap-1.5">
+        <NumberField label="X" value={shape.x} onChange={x => onChange({ x })} step={0.5} unit={u} />
+        <NumberField label="Y" value={shape.y} onChange={y => onChange({ y })} step={0.5} unit={u} />
+        <NumberField label="W" value={shape.width}  onChange={width  => onChange({ width  })} min={0.01} step={0.5} unit={u} />
+        <NumberField label="H" value={shape.height} onChange={height => onChange({ height })} min={0.01} step={0.5} unit={u} />
+      </div>
+      <NumberField label="Rotation" value={shape.rotation ?? 0} onChange={rotation => onChange({ rotation })} step={1} unit="°" />
+      <div className="flex gap-1.5">
+        <button className={btnCls} onClick={() => onChange({ x: shape.x + shape.width, width: -shape.width })}><FlipHorizontal size={10} />Flip H</button>
+        <button className={btnCls} onClick={() => onChange({ y: shape.y + shape.height, height: -shape.height })}><FlipVertical size={10} />Flip V</button>
+      </div>
+    </>
+  )
+
+  if (shape.type === 'circle') return (
+    <div className="grid grid-cols-2 gap-1.5">
+      <NumberField label="X" value={shape.x} onChange={x => onChange({ x })} step={0.5} unit={u} />
+      <NumberField label="Y" value={shape.y} onChange={y => onChange({ y })} step={0.5} unit={u} />
+      <NumberField label="Radius" value={shape.radius} onChange={radius => onChange({ radius })} min={0.01} step={0.5} unit={u} className="col-span-2" />
+    </div>
+  )
+
+  if (shape.type === 'ellipse') return (
+    <>
+      <div className="grid grid-cols-2 gap-1.5">
+        <NumberField label="X" value={shape.x} onChange={x => onChange({ x })} step={0.5} unit={u} />
+        <NumberField label="Y" value={shape.y} onChange={y => onChange({ y })} step={0.5} unit={u} />
+        <NumberField label="W" value={shape.radiusX * 2} onChange={v => onChange({ radiusX: v / 2 })} min={0.01} step={0.5} unit={u} />
+        <NumberField label="H" value={shape.radiusY * 2} onChange={v => onChange({ radiusY: v / 2 })} min={0.01} step={0.5} unit={u} />
+      </div>
+      <NumberField label="Rotation" value={shape.rotation ?? 0} onChange={rotation => onChange({ rotation })} step={1} unit="°" />
+    </>
+  )
+
+  if (shape.type === 'text') return (
+    <>
+      <div className="grid grid-cols-2 gap-1.5">
+        <NumberField label="X" value={shape.x} onChange={x => onChange({ x })} step={0.5} unit={u} />
+        <NumberField label="Y" value={shape.y} onChange={y => onChange({ y })} step={0.5} unit={u} />
+      </div>
+      <NumberField label="Font size" value={shape.fontSize} onChange={fontSize => onChange({ fontSize })} min={0.5} step={0.5} unit={u} />
+      <NumberField label="Rotation" value={shape.rotation ?? 0} onChange={rotation => onChange({ rotation })} step={1} unit="°" />
+    </>
+  )
+
+  if (shape.type === 'path') return (
+    <>
+      <div className="grid grid-cols-2 gap-1.5">
+        <NumberField label="X" value={shape.x ?? 0} onChange={x => onChange({ x })} step={0.5} unit={u} />
+        <NumberField label="Y" value={shape.y ?? 0} onChange={y => onChange({ y })} step={0.5} unit={u} />
+        <NumberField label="Scale X" value={Math.abs(shape.scaleX ?? 1) * 100} onChange={v => onChange({ scaleX: (v / 100) * Math.sign((shape.scaleX ?? 1) || 1) })} min={1} step={5} unit="%" />
+        <NumberField label="Scale Y" value={Math.abs(shape.scaleY ?? 1) * 100} onChange={v => onChange({ scaleY: (v / 100) * Math.sign((shape.scaleY ?? 1) || 1) })} min={1} step={5} unit="%" />
+      </div>
+      <div className="flex gap-1.5">
+        <button className={btnCls} onClick={() => onChange({ scaleX: -(shape.scaleX ?? 1) })}><FlipHorizontal size={10} />Flip H</button>
+        <button className={btnCls} onClick={() => onChange({ scaleY: -(shape.scaleY ?? 1) })}><FlipVertical size={10} />Flip V</button>
+      </div>
+    </>
+  )
+
+  return null
+}
+
 // ── CutConfig editor (shared between single and multi-select) ─────────────
 interface CfgEditorProps {
   cfg: CutConfig
@@ -63,8 +134,29 @@ interface CfgEditorProps {
   onChange: (patch: Partial<CutConfig>) => void
 }
 
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-center justify-between cursor-pointer select-none">
+      <span className="text-[10px] text-gray-400">{label}</span>
+      <button
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative w-7 h-4 rounded-full transition-colors ${checked ? 'bg-blue-600' : 'bg-gray-600'}`}
+      >
+        <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${checked ? 'translate-x-3' : ''}`} />
+      </button>
+    </label>
+  )
+}
+
 function CutConfigEditor({ cfg, units, onChange }: CfgEditorProps) {
   const passCount = Math.max(1, Math.ceil(cfg.totalDepth / cfg.maxDepthPerPass))
+  const isContour = cfg.operation === 'contour'
+  const isPocket  = cfg.operation === 'pocket'
+  const isVcarve  = cfg.operation === 'v-carve'
+  const hasTabs   = (cfg.tabCount ?? 0) > 0
+
   return (
     <>
       <SelectField
@@ -73,7 +165,7 @@ function CutConfigEditor({ cfg, units, onChange }: CfgEditorProps) {
         onChange={v => onChange({ operation: v as OperationType })}
         options={OP_OPTIONS}
       />
-      {cfg.operation === 'contour' && (
+      {isContour && (
         <SelectField
           label="Contour side"
           value={cfg.contourSide ?? 'on-line'}
@@ -81,7 +173,7 @@ function CutConfigEditor({ cfg, units, onChange }: CfgEditorProps) {
           options={SIDE_OPTIONS}
         />
       )}
-      {cfg.operation === 'pocket' && (
+      {isPocket && (
         <NumberField
           label="Stepover"
           value={Math.round((cfg.pocketStepover ?? 0.4) * 100)}
@@ -89,21 +181,71 @@ function CutConfigEditor({ cfg, units, onChange }: CfgEditorProps) {
           min={1} max={100} step={5} unit="%"
         />
       )}
-      <NumberField
-        label="Total depth"
-        value={cfg.totalDepth}
-        onChange={v => onChange({ totalDepth: v })}
-        min={0.01} step={0.5} unit={units}
-      />
-      <NumberField
-        label="Max depth / pass"
-        value={cfg.maxDepthPerPass}
-        onChange={v => onChange({ maxDepthPerPass: v })}
-        min={0.01} step={0.1} unit={units}
-      />
-      <div className="text-[10px] text-gray-400">
-        <span className="text-gray-500">Passes  </span>{passCount}
-      </div>
+      {!isVcarve && (
+        <>
+          <NumberField
+            label="Total depth"
+            value={cfg.totalDepth}
+            onChange={v => onChange({ totalDepth: v })}
+            min={0.01} step={0.5} unit={units}
+          />
+          <NumberField
+            label="Max depth / pass"
+            value={cfg.maxDepthPerPass}
+            onChange={v => onChange({ maxDepthPerPass: v })}
+            min={0.01} step={0.1} unit={units}
+          />
+          <div className="text-[10px] text-gray-400">
+            <span className="text-gray-500">Passes  </span>{passCount}
+          </div>
+        </>
+      )}
+      {isVcarve && (
+        <NumberField
+          label="Flat relief depth"
+          value={cfg.vFlatDepth ?? 0}
+          onChange={v => onChange({ vFlatDepth: v > 0 ? v : undefined })}
+          min={0} step={0.1} unit={units}
+        />
+      )}
+      {(isContour || isPocket) && (
+        <Toggle
+          label="Dogbone corners"
+          checked={cfg.dogbone ?? false}
+          onChange={v => onChange({ dogbone: v || undefined })}
+        />
+      )}
+      {isContour && (
+        <>
+          <Toggle
+            label="Holding tabs"
+            checked={hasTabs}
+            onChange={v => onChange({ tabCount: v ? (cfg.tabCount || 4) : 0 })}
+          />
+          {hasTabs && (
+            <>
+              <NumberField
+                label="Tab count"
+                value={cfg.tabCount ?? 4}
+                onChange={v => onChange({ tabCount: Math.max(1, Math.round(v)) })}
+                min={1} max={20} step={1}
+              />
+              <NumberField
+                label="Tab width"
+                value={cfg.tabWidth ?? 5}
+                onChange={v => onChange({ tabWidth: v })}
+                min={0.1} step={0.5} unit={units}
+              />
+              <NumberField
+                label="Tab height"
+                value={cfg.tabHeight ?? 2}
+                onChange={v => onChange({ tabHeight: v })}
+                min={0.1} step={0.1} unit={units}
+              />
+            </>
+          )}
+        </>
+      )}
     </>
   )
 }
@@ -164,6 +306,8 @@ export default function ShapePanel() {
             </div>
           )}
         </div>
+        <div className="w-full h-px bg-gray-700" />
+        <TransformEditor shape={shape} units={units} onChange={patch} />
         <div className="w-full h-px bg-gray-700" />
         <CutConfigEditor cfg={cfg} units={units} onChange={patch} />
         {holes.length > 0 && (

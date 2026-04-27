@@ -29,7 +29,7 @@ export function computeToolpath(
     }
   })()
 
-  if (!moves.length) return null
+  if (!moves || !moves.length) return null
   return { shapeId: shape.id, operation: cfg.operation, moves }
 }
 

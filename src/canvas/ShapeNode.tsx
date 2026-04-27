@@ -6,6 +6,8 @@ import type {
   Shape, LineShape, RectShape, CircleShape, EllipseShape, TextShape, PathShape,
 } from '@/types'
 
+function snapVal(v: number, grid: number) { return Math.round(v / grid) * grid }
+
 interface Props {
   shape: Shape
   isSelected: boolean
@@ -15,9 +17,21 @@ interface Props {
 
 export default function ShapeNode({ shape, isSelected, onSelect, isPreview }: Props) {
   const { updateShape } = useDocumentStore()
-  const { currentTool } = useUIStore()
+  const { currentTool, snapEnabled, snapGridSize, nodeEditShapeId } = useUIStore()
 
-  const draggable = currentTool === 'select' && !isPreview
+  const snap = (x: number, y: number) => snapEnabled
+    ? { x: snapVal(x, snapGridSize), y: snapVal(y, snapGridSize) }
+    : { x, y }
+
+  const onDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (!snapEnabled) return
+    const node = e.target
+    const s = snap(node.x(), node.y())
+    node.x(s.x); node.y(s.y)
+  }
+
+  const isNodeEditing = nodeEditShapeId === shape.id
+  const draggable = currentTool === 'select' && !isPreview && !isNodeEditing
   // Shapes are non-interactive in draw mode so clicks reach the Stage
   const listening = currentTool === 'select' || isPreview === true ? true : false
 
@@ -51,11 +65,11 @@ export default function ShapeNode({ shape, isSelected, onSelect, isPreview }: Pr
         {...baseProps}
         fill={shape.style.fill}
         points={s.points}
+        onDragMove={onDragMove}
         onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
           const dx = e.target.x()
           const dy = e.target.y()
-          e.target.x(0)
-          e.target.y(0)
+          e.target.x(0); e.target.y(0)
           updateShape(shape.id, {
             points: s.points.map((v, i) => (i % 2 === 0 ? v + dx : v + dy)),
           })
@@ -73,6 +87,7 @@ export default function ShapeNode({ shape, isSelected, onSelect, isPreview }: Pr
         x={s.x} y={s.y}
         width={s.width} height={s.height}
         rotation={s.rotation ?? 0}
+        onDragMove={onDragMove}
         onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
           updateShape(shape.id, { x: e.target.x(), y: e.target.y() })
         }}
@@ -98,6 +113,7 @@ export default function ShapeNode({ shape, isSelected, onSelect, isPreview }: Pr
         {...baseProps}
         fill={shape.style.fill}
         x={s.x} y={s.y} radius={s.radius}
+        onDragMove={onDragMove}
         onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
           updateShape(shape.id, { x: e.target.x(), y: e.target.y() })
         }}
@@ -114,6 +130,7 @@ export default function ShapeNode({ shape, isSelected, onSelect, isPreview }: Pr
         x={s.x} y={s.y}
         radiusX={s.radiusX} radiusY={s.radiusY}
         rotation={s.rotation ?? 0}
+        onDragMove={onDragMove}
         onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
           updateShape(shape.id, { x: e.target.x(), y: e.target.y() })
         }}
@@ -144,6 +161,7 @@ export default function ShapeNode({ shape, isSelected, onSelect, isPreview }: Pr
         fontSize={s.fontSize}
         fontFamily={s.fontFamily}
         rotation={s.rotation ?? 0}
+        onDragMove={onDragMove}
         onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
           updateShape(shape.id, { x: e.target.x(), y: e.target.y() })
         }}
@@ -170,6 +188,7 @@ export default function ShapeNode({ shape, isSelected, onSelect, isPreview }: Pr
         data={s.data}
         x={s.x ?? 0} y={s.y ?? 0}
         scaleX={s.scaleX ?? 1} scaleY={s.scaleY ?? 1}
+        onDragMove={onDragMove}
         onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
           updateShape(shape.id, { x: e.target.x(), y: e.target.y() })
         }}

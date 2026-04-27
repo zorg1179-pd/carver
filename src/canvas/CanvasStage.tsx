@@ -4,6 +4,7 @@ import Konva from 'konva'
 import MachineBed from './MachineBed'
 import DrawingLayer from './DrawingLayer'
 import ToolpathLayer from './ToolpathLayer'
+import NodeEditLayer from './NodeEditLayer'
 import { useDrawingTool } from './useDrawingTool'
 import { useMachineStore, useDocumentStore, useToolpathStore } from '@/stores'
 import { useUIStore, TEXT_FONTS } from '@/stores/useUIStore'
@@ -78,6 +79,8 @@ export default function CanvasStage() {
     showToolpaths, toolpathPlaying, toolpathSpeed,
     setToolpathPlaying, setToolpathSpeed, resetToolpathAnimation,
     textFont, setTextFont, textFontSize, setTextFontSize,
+    snapEnabled, setSnapEnabled, snapGridSize, setSnapGridSize,
+    nodeEditShapeId, setNodeEditShapeId,
   } = useUIStore()
   const { transform, setTransform, fitToView } = useCanvasTransform(bedWidth, bedHeight)
   const drawing = useDrawingTool()
@@ -103,6 +106,7 @@ export default function CanvasStage() {
     if (!el) return
     const ro = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect
+      if (width === 0 || height === 0) return   // hidden tab — skip
       setSize({ width, height })
       fitToView(width, height)
     })
@@ -124,7 +128,14 @@ export default function CanvasStage() {
         const el = containerRef.current
         if (el) fitToView(el.clientWidth, el.clientHeight - 28)
       }
+      if (e.code === 'KeyS') {
+        setSnapEnabled(!snapEnabledRef.current)
+      }
       if (e.code === 'Escape') {
+        if (nodeEditShapeIdRef.current) {
+          setNodeEditShapeId(null)
+          return
+        }
         drawing.cancel()
         clearSelection()
         setCurrentTool('select')
@@ -153,16 +164,28 @@ export default function CanvasStage() {
       window.removeEventListener('keydown', onDown)
       window.removeEventListener('keyup', onUp)
     }
-  }, [fitToView, selectedIds, drawing, setSelectedId, clearSelection, setCurrentTool, removeSelectedShapes, undo, redo])
+  }, [fitToView, selectedIds, drawing, setSelectedId, clearSelection, setCurrentTool, removeSelectedShapes, undo, redo, setSnapEnabled, setNodeEditShapeId])
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
+  const snapEnabledRef = useRef(snapEnabled)
+  snapEnabledRef.current = snapEnabled
+  const snapGridSizeRef = useRef(snapGridSize)
+  snapGridSizeRef.current = snapGridSize
+  const nodeEditShapeIdRef = useRef(nodeEditShapeId)
+  nodeEditShapeIdRef.current = nodeEditShapeId
+
   const getCanvasPt = () => {
     const stage = stageRef.current
     if (!stage) return { x: 0, y: 0 }
     const pos = stage.getPointerPosition()
     if (!pos) return { x: 0, y: 0 }
     const t = transformRef.current
-    return { x: (pos.x - t.x) / t.scale, y: (pos.y - t.y) / t.scale }
+    const raw = { x: (pos.x - t.x) / t.scale, y: (pos.y - t.y) / t.scale }
+    if (snapEnabledRef.current) {
+      const g = snapGridSizeRef.current
+      return { x: Math.round(raw.x / g) * g, y: Math.round(raw.y / g) * g }
+    }
+    return raw
   }
 
   // ── Stage events ─────────────────────────────────────────────────────────────
@@ -272,15 +295,30 @@ export default function CanvasStage() {
     }
   }
 
-  // Deselect when clicking empty stage in select mode
+  // Deselect / exit node-edit when clicking empty stage in select mode
   const handleStageClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
     if (currentTool === 'select' && e.target === stageRef.current) {
+      if (nodeEditShapeId) {
+        setNodeEditShapeId(null)
+        return
+      }
       clearSelection()
     }
   }
 
-  const handleDblClick = () => {
-    if (currentTool === 'line') drawing.onDoubleClick()
+  const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    if (currentTool === 'line') {
+      drawing.onDoubleClick()
+      return
+    }
+    if (currentTool === 'select' && e.target !== stageRef.current) {
+      const id = e.target.id()
+      const shape = id ? shapes.find(s => s.id === id) : null
+      if (shape && (shape.type === 'line' || shape.type === 'path')) {
+        setSelectedId(id)
+        setNodeEditShapeId(id)
+      }
+    }
   }
 
   // Text input screen position
@@ -346,6 +384,7 @@ export default function CanvasStage() {
           </Layer>
           <DrawingLayer previewShape={drawing.previewShape} />
           <ToolpathLayer />
+          <NodeEditLayer scale={transform.scale} />
         </Stage>
 
       </div>
@@ -450,6 +489,35 @@ export default function CanvasStage() {
         >
           Fit <kbd className="text-gray-600">F</kbd>
         </button>
+        <span className="text-gray-700">|</span>
+        <button
+          onClick={() => setSnapEnabled(!snapEnabled)}
+          className={`transition-colors ${snapEnabled ? 'text-blue-400' : 'text-gray-600 hover:text-gray-400'}`}
+        >
+          Snap <kbd className="text-gray-600">S</kbd>
+        </button>
+        {snapEnabled && (
+          <input
+            type="number"
+            min={0.1} max={100} step={0.5}
+            value={snapGridSize}
+            onChange={e => setSnapGridSize(Math.max(0.1, Number(e.target.value)))}
+            onKeyDown={e => e.stopPropagation()}
+            className="w-12 bg-gray-800 border border-gray-600 rounded px-1 text-[10px] text-white focus:outline-none focus:border-blue-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+            title="Snap grid size"
+          />
+        )}
+        {nodeEditShapeId && (
+          <>
+            <span className="text-gray-700">|</span>
+            <span className="text-amber-400">Node editing</span>
+            <button
+              onClick={() => setNodeEditShapeId(null)}
+              className="text-gray-500 hover:text-gray-300 transition-colors"
+              title="Exit node editor (Esc)"
+            >✕</button>
+          </>
+        )}
         <span className="ml-auto text-gray-700 hidden lg:block">
           Space+drag · middle-click to pan · scroll to zoom · Del to delete
         </span>

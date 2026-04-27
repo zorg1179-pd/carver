@@ -3,6 +3,7 @@ import { Layer, Transformer } from 'react-konva'
 import Konva from 'konva'
 import ShapeNode from './ShapeNode'
 import { useDocumentStore } from '@/stores'
+import { useUIStore } from '@/stores/useUIStore'
 import type { Shape } from '@/types'
 
 interface Props {
@@ -13,16 +14,19 @@ export default function DrawingLayer({ previewShape }: Props) {
   const layerRef = useRef<Konva.Layer>(null)
   const trRef    = useRef<Konva.Transformer>(null)
   const { shapes, selectedIds, setSelectedId, addToSelection } = useDocumentStore()
+  const { nodeEditShapeId } = useUIStore()
 
-  // Attach transformer to all selected non-line nodes after each render
+  // Attach transformer to selected non-line nodes; hide when node-editing
   useEffect(() => {
     if (!trRef.current || !layerRef.current) return
-    const nodes = selectedIds
-      .filter(id => shapes.find(s => s.id === id)?.type !== 'line')
-      .map(id => layerRef.current!.findOne<Konva.Node>('#' + id))
-      .filter((n): n is Konva.Node => n != null)
+    const nodes = nodeEditShapeId
+      ? []
+      : selectedIds
+          .filter(id => shapes.find(s => s.id === id)?.type !== 'line')
+          .map(id => layerRef.current!.findOne<Konva.Node>('#' + id))
+          .filter((n): n is Konva.Node => n != null)
     trRef.current.nodes(nodes)
-  }, [selectedIds, shapes])
+  }, [selectedIds, shapes, nodeEditShapeId])
 
   return (
     <Layer ref={layerRef}>
