@@ -3,6 +3,28 @@ import type { Shape } from '@/types'
 
 const K = 0.5522847498  // kappa for cubic bezier circle approximation
 
+/**
+ * Apply a rotation of `deg` degrees around pivot point (px, py) to a path data string.
+ * Uses the SVG affine matrix for rotation-about-a-point:
+ *   x' = cosθ·x − sinθ·y + px(1−cosθ) + py·sinθ
+ *   y' = sinθ·x + cosθ·y + py(1−cosθ) − px·sinθ
+ */
+function rotatePath(data: string, deg: number, px: number, py: number): string {
+  if (!deg) return data
+  const rad = (deg * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  return new SVGPathData(data)
+    .transform(SVGPathDataTransformer.TO_ABS())
+    .transform(SVGPathDataTransformer.NORMALIZE_HVZ())
+    .transform(SVGPathDataTransformer.MATRIX(
+      cos, sin, -sin, cos,
+      px * (1 - cos) + py * sin,
+      py * (1 - cos) - px * sin,
+    ))
+    .encode()
+}
+
 // ── Shape → SVG path data ─────────────────────────────────────────────────
 export function shapeToPathData(shape: Shape): string | null {
   switch (shape.type) {
@@ -26,14 +48,17 @@ export function shapeToPathData(shape: Shape): string | null {
       return parts.join('')
     }
     case 'rect': {
-      const { x, y, width: w, height: h } = shape
+      const { x, y, width: w, height: h, rotation } = shape
       if (w <= 0 || h <= 0) return null
-      return `M${x},${y}H${x+w}V${y+h}H${x}Z`
+      const data = `M${x},${y}H${x+w}V${y+h}H${x}Z`
+      // Konva rotates a Rect around its top-left corner (x, y)
+      return rotatePath(data, rotation ?? 0, x, y)
     }
     case 'circle': {
       const { x: cx, y: cy, radius: r } = shape
       if (r <= 0) return null
       const k = K * r
+      // Circles are rotationally symmetric — no rotation transform needed
       return `M${cx+r},${cy}` +
         `C${cx+r},${cy+k} ${cx+k},${cy+r} ${cx},${cy+r}` +
         `C${cx-k},${cy+r} ${cx-r},${cy+k} ${cx-r},${cy}` +
@@ -41,14 +66,17 @@ export function shapeToPathData(shape: Shape): string | null {
         `C${cx+k},${cy-r} ${cx+r},${cy-k} ${cx+r},${cy}Z`
     }
     case 'ellipse': {
-      const { x: cx, y: cy, radiusX: rx, radiusY: ry } = shape
+      const { x: cx, y: cy, radiusX: rx, radiusY: ry, rotation } = shape
       if (rx <= 0 || ry <= 0) return null
       const kx = K * rx, ky = K * ry
-      return `M${cx+rx},${cy}` +
+      // Generate axis-aligned ellipse first, then rotate around its centre
+      const data = `M${cx+rx},${cy}` +
         `C${cx+rx},${cy+ky} ${cx+kx},${cy+ry} ${cx},${cy+ry}` +
         `C${cx-kx},${cy+ry} ${cx-rx},${cy+ky} ${cx-rx},${cy}` +
         `C${cx-rx},${cy-ky} ${cx-kx},${cy-ry} ${cx},${cy-ry}` +
         `C${cx+kx},${cy-ry} ${cx+rx},${cy-ky} ${cx+rx},${cy}Z`
+      // Konva rotates an Ellipse around its centre (cx, cy)
+      return rotatePath(data, rotation ?? 0, cx, cy)
     }
     case 'text': return null
   }
