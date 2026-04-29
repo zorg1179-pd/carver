@@ -307,7 +307,7 @@ export default function ShapePanel() {
           )}
         </div>
         <div className="w-full h-px bg-gray-700" />
-        <TransformEditor shape={shape} units={units} onChange={patch} />
+        <TransformEditor shape={shape} units={units} onChange={u => updateShape(shape.id, u)} />
         <div className="w-full h-px bg-gray-700" />
         <CutConfigEditor cfg={cfg} units={units} onChange={patch} />
         {holes.length > 0 && (

@@ -72,8 +72,9 @@ export function computeVcarveMoves(pathData: string, params: VCarveParams): Move
 
     // Inward offset for next level
     r += stepSize
+    // Re-stamp closed:true so the type stays consistent with the initial forced-closed array
     const next = polys
-      .map(p => offsetPolyline(p, stepSize))
+      .map(p => ({ ...offsetPolyline(p, stepSize), closed: true as const }))
       .filter(p => p.pts.length >= 3 && bboxSize(p.pts) > stepSize * 1.5)
 
     if (next.length === 0) break

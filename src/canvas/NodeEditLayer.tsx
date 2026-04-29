@@ -92,7 +92,8 @@ export default function NodeEditLayer({ scale }: Props) {
               // Convert dragged canvas position → local path-data coordinates
               const newLx = (e.target.x() - ox) / sx
               const newLy = (e.target.y() - oy) / sy
-              parsed.commands[cmdIdx] = { ...parsed.commands[cmdIdx], x: newLx, y: newLy }
+              // Safe: nodes only includes M/L/C/Q/A command types (filtered above) — all carry x and y
+              parsed.commands[cmdIdx] = { ...parsed.commands[cmdIdx], x: newLx, y: newLy } as unknown as (typeof parsed.commands)[number]
               updateShape(shape.id, { data: parsed.encode() })
             }}
           />
