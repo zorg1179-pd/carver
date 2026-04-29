@@ -1,6 +1,8 @@
-import { useRef } from 'react'
-import { FilePlus, FolderOpen, Save, AlertCircle, Undo2, Redo2 } from 'lucide-react'
+import { useRef, useState, useEffect } from 'react'
+import { FilePlus, FolderOpen, Save, AlertCircle, Undo2, Redo2, Plug, PlugZap } from 'lucide-react'
 import { useDocumentStore } from '@/stores'
+import { useSerialStore } from '@/stores/useSerialStore'
+import { connect, disconnect } from '@/serial/serialService'
 
 interface Props {
   isDirty: boolean
@@ -14,14 +16,31 @@ interface Props {
 export default function HeaderBar({
   isDirty, lastSavedAt, loadError, onNew, onSaveToFile, onLoadFromFile,
 }: Props) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef  = useRef<HTMLInputElement>(null)
+  const popoverRef    = useRef<HTMLDivElement>(null)
   const { past, future, undo, redo } = useDocumentStore()
+  const { status, baudRate, controllerName, setBaudRate } = useSerialStore()
+  const [showPopover, setShowPopover] = useState(false)
+
+  const webSerialSupported = 'serial' in navigator
+
+  // Close popover on outside click
+  useEffect(() => {
+    if (!showPopover) return
+    const handler = (e: MouseEvent) => {
+      if (!popoverRef.current?.contains(e.target as Node)) setShowPopover(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showPopover])
 
   const statusText = isDirty
     ? 'Saving…'
     : lastSavedAt
       ? `Auto-saved ${lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
       : null
+
+  const isConnected = status !== 'disconnected'
 
   return (
     <header className="h-9 bg-gray-950 border-b border-gray-700 flex items-center px-3 gap-1 shrink-0 select-none z-20">
@@ -81,6 +100,69 @@ export default function HeaderBar({
       >
         <Redo2 size={12} /> Redo
       </button>
+
+      <div className="w-px h-4 bg-gray-700 mx-1" />
+
+      {/* ── Serial connect button ──────────────────────────────────────────── */}
+      {webSerialSupported ? (
+        <div className="relative" ref={popoverRef}>
+          <button
+            onClick={() => setShowPopover((v) => !v)}
+            title={isConnected ? controllerName : 'Connect to machine'}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
+              isConnected
+                ? 'text-green-400 border border-green-800 bg-green-900/20 hover:bg-green-900/40'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+            }`}
+          >
+            {isConnected ? <PlugZap size={12} /> : <Plug size={12} />}
+            {isConnected ? (controllerName || '● Connected') : 'Connect'}
+          </button>
+
+          {showPopover && (
+            <div className="absolute top-full left-0 mt-1 z-50 bg-gray-900 border border-gray-600 rounded shadow-xl p-3 w-48">
+              <div className="text-[10px] text-gray-400 mb-1">Baud rate</div>
+              <select
+                value={baudRate}
+                onChange={(e) => setBaudRate(Number(e.target.value))}
+                onKeyDown={(e) => e.stopPropagation()}
+                className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1
+                           text-xs text-white mb-3 focus:outline-none focus:border-blue-500"
+              >
+                <option value={115200}>115200</option>
+                <option value={57600}>57600</option>
+                <option value={9600}>9600</option>
+              </select>
+
+              {isConnected ? (
+                <button
+                  onClick={() => { disconnect(); setShowPopover(false) }}
+                  className="w-full px-2 py-1.5 rounded bg-red-900/40 border border-red-800
+                             text-red-400 text-xs hover:bg-red-900/60 transition-colors"
+                >
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  onClick={() => { connect(); setShowPopover(false) }}
+                  className="w-full px-2 py-1.5 rounded bg-green-800/40 border border-green-700
+                             text-green-300 text-xs hover:bg-green-800/60 transition-colors"
+                >
+                  Connect
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <button
+          disabled
+          title="WebSerial requires Chrome or Edge"
+          className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-gray-600 cursor-not-allowed"
+        >
+          <Plug size={12} /> Connect
+        </button>
+      )}
 
       <div className="ml-auto flex items-center gap-2 text-[10px]">
         {loadError && (
