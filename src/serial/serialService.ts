@@ -150,6 +150,7 @@ export async function startJob(gcode: string): Promise<void> {
   if (useSerialStore.getState().status !== 'connected') return
   const lines = gcode
     .split('\n')
+    // TODO: also strip (...) parenthesis-style G-code comments for CAM compatibility
     .map((l) => l.replace(/;.*$/, '').trim())
     .filter((l) => l.length > 0)
   allLines  = lines
@@ -176,6 +177,7 @@ export function cancelJob(): void {
   const { status } = useSerialStore.getState()
   if (status !== 'running' && status !== 'paused') return
   sendQueue    = []
+  allLines     = []
   waitingForOk = false
   writer?.write(enc.encode('\x18')).catch(() => {})
   useSerialStore.setState({ status: 'connected', currentLine: 0, totalLines: 0, errorMsg: null })

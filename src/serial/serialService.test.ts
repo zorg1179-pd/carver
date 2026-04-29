@@ -138,7 +138,7 @@ describe('skipToLine()', () => {
     await startJob('G0 X0\nG1 X10')
     pauseJob()
     skipToLine(999)
-    expect(useSerialStore.getState().currentLine).toBeLessThanOrEqual(2)
+    expect(useSerialStore.getState().currentLine).toBe(2)
   })
 
   it('does nothing when not paused', async () => {
