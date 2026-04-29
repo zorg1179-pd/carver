@@ -2,9 +2,13 @@ import { useSerialStore } from '@/stores/useSerialStore'
 import { parseStatusResponse, parseControllerName, getGrblErrorDescription } from './grblParser'
 
 // ── Module-level serial state ─────────────────────────────────────────────────
-let port:       SerialPort | null                              = null
-let portReader: ReadableStreamDefaultReader<Uint8Array> | null = null
-let writer:     WritableStreamDefaultWriter<Uint8Array> | null = null
+// WebSerial API types are not available in all TypeScript DOM lib versions
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let port:       any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let portReader: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let writer:     any = null
 let pollTimer:  ReturnType<typeof setInterval> | null          = null
 let allLines:   string[]                                       = []
 let sendQueue:  string[]                                       = []
@@ -107,7 +111,7 @@ function stopPoll(): void {
 export async function connect(): Promise<void> {
   const { baudRate } = useSerialStore.getState()
   try {
-    port = await navigator.serial.requestPort()
+    port = await (navigator as any).serial.requestPort()
     await port.open({ baudRate })
     writer = port.writable.getWriter()
     useSerialStore.setState({ status: 'connected', errorMsg: null, controllerName: '' })

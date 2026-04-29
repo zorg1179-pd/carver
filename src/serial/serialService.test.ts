@@ -54,7 +54,7 @@ afterEach(async () => {
 describe('connect()', () => {
   it('calls requestPort and opens port with correct baud rate', async () => {
     await connect()
-    expect(navigator.serial.requestPort).toHaveBeenCalled()
+    expect((navigator as any).serial.requestPort).toHaveBeenCalled()
     expect(mockPort.open).toHaveBeenCalledWith({ baudRate: 115200 })
   })
 
@@ -66,7 +66,7 @@ describe('connect()', () => {
   it('sends $I to request firmware version', async () => {
     await connect()
     const calls = mockPort._mockWrite.mock.calls.map(
-      (c: [Uint8Array]) => new TextDecoder().decode(c[0]),
+      (c: any[]) => new TextDecoder().decode(c[0]),
     )
     expect(calls).toContain('$I\n')
   })
