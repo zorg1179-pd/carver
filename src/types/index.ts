@@ -169,3 +169,11 @@ export interface MaterialPreset {
   isBuiltIn: boolean
   feeds: Partial<Record<BitType, MaterialFeeds>>
 }
+
+// ── Serial / machine position ──────────────────────────────────────────────────
+
+export interface Vec3 {
+  x: number
+  y: number
+  z: number
+}
