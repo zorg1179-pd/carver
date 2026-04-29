@@ -116,7 +116,7 @@ export default function HeaderBar({
             }`}
           >
             {isConnected ? <PlugZap size={12} /> : <Plug size={12} />}
-            {isConnected ? (controllerName || '● Connected') : 'Connect'}
+            {isConnected ? (controllerName ? `● ${controllerName}` : '● Connected') : 'Connect'}
           </button>
 
           {showPopover && (
