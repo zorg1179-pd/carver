@@ -26,12 +26,13 @@ export default function SerialStatusBar() {
   useEffect(() => {
     if (status !== 'running') {
       rateHistoryRef.current = []
-      prevLineRef.current    = currentLine
+      prevLineRef.current    = useSerialStore.getState().currentLine
       prevTimeRef.current    = Date.now()
       setEtaSeconds(0)
       return
     }
     const id = setInterval(() => {
+      const { currentLine, totalLines } = useSerialStore.getState()
       const now    = Date.now()
       const dt     = (now - prevTimeRef.current) / 1000
       const dLines = currentLine - prevLineRef.current
@@ -46,7 +47,7 @@ export default function SerialStatusBar() {
       setEtaSeconds(avg > 0 ? (totalLines - currentLine) / avg : 0)
     }, 1000)
     return () => clearInterval(id)
-  }, [status, currentLine, totalLines])
+  }, [status])
 
   const progress = totalLines > 0 ? currentLine / totalLines : 0
   const posText  = workPos
@@ -156,7 +157,7 @@ export default function SerialStatusBar() {
       {status === 'error' && (
         <>
           <span className="text-red-400">✕ Error</span>
-          <span className="text-red-300 text-[10px] truncate max-w-xs">{errorMsg}</span>
+          <span className="text-red-300 text-[10px] truncate max-w-xs">{errorMsg ?? ''}</span>
           <button
             onClick={connect}
             className="ml-auto flex items-center gap-1 px-3 py-1 rounded border border-green-700
