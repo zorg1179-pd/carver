@@ -28,6 +28,7 @@ export type ShapeType = 'line' | 'rect' | 'circle' | 'ellipse' | 'text' | 'path'
 interface BaseShape {
   id: string
   type: ShapeType
+  layerId?: string      // undefined → belongs to 'default'
   style: {
     stroke: string
     fill: string
@@ -115,6 +116,16 @@ export interface Toolpath {
   shapeId: string
   operation: OperationType
   moves: Move[]
+}
+
+// ── Layers ────────────────────────────────────────────────────────────────────
+
+export interface Layer {
+  id: string
+  name: string
+  visible: boolean
+  locked: boolean
+  color: string | null  // null = use the shape's own colour
 }
 
 // ── Machine profiles ──────────────────────────────────────────────────────────

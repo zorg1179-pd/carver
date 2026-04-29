@@ -1,4 +1,4 @@
-import type { Shape, Units, BitType } from '@/types'
+import type { Layer, Shape, Units, BitType } from '@/types'
 
 export const CARVER_VERSION = 1 as const
 export const LS_KEY = 'carver_project_v1'
@@ -32,6 +32,7 @@ export interface CarverProject {
   material: MaterialData
   tool: ToolData
   shapes: Shape[]
+  layers?: Layer[]  // optional — absent in v1 files saved before 2.1
 }
 
 export function serializeProject(
@@ -39,8 +40,9 @@ export function serializeProject(
   material: MaterialData,
   tool: ToolData,
   shapes: Shape[],
+  layers?: Layer[],
 ): CarverProject {
-  return { version: CARVER_VERSION, machine, material, tool, shapes }
+  return { version: CARVER_VERSION, machine, material, tool, shapes, layers }
 }
 
 export function deserializeProject(raw: unknown): CarverProject {

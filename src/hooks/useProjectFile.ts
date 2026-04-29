@@ -11,7 +11,7 @@ export function useProjectFile() {
   const machine  = useMachineStore()
   const material = useMaterialStore()
   const tool     = useToolStore()
-  const { shapes, setShapes } = useDocumentStore()
+  const { shapes, setShapes, layers, setLayers } = useDocumentStore()
   const clearToolpaths  = useToolpathStore(s => s.clear)
   const resetAnimation  = useUIStore(s => s.resetToolpathAnimation)
 
@@ -37,6 +37,7 @@ export function useProjectFile() {
       plungeRate: tool.plungeRate, maxDepthPerPass: tool.maxDepthPerPass,
     },
     shapes,
+    layers,
   )
 
   // Always-current apply function — updated on every render so it always calls the latest setters
@@ -63,6 +64,8 @@ export function useProjectFile() {
     tool.setMaxDepthPerPass(t.maxDepthPerPass)
 
     setShapes(project.shapes)
+    // Restore layers if present; older v1 files without layers get a fresh default set
+    if (project.layers?.length) setLayers(project.layers)
     clearToolpaths()
     resetAnimation()
   }
@@ -88,6 +91,7 @@ export function useProjectFile() {
     tool.bitType, tool.diameter, tool.vBitAngle, tool.spindleRpm, tool.feedRate,
     tool.plungeRate, tool.maxDepthPerPass,
     shapes,
+    layers,
     writeLS,
   ])
 

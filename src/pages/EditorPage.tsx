@@ -4,6 +4,7 @@ import { clsx } from 'clsx'
 import CanvasStage from '@/canvas/CanvasStage'
 import Toolbar from '@/components/Toolbar'
 import HeaderBar from '@/components/HeaderBar'
+import LayersPanel     from '@/components/panels/LayersPanel'
 import MachinePanel    from '@/components/panels/MachinePanel'
 import MaterialPanel   from '@/components/panels/MaterialPanel'
 import ToolPanel       from '@/components/panels/ToolPanel'
@@ -168,6 +169,8 @@ export default function EditorPage() {
 
       {/* Right properties panel */}
       <aside className="w-64 bg-gray-800 border-l border-gray-700 p-3 shrink-0 overflow-y-auto flex flex-col gap-4">
+        <LayersPanel />
+        <div className="w-full h-px bg-gray-700" />
         <ShapePanel />
         <div className="w-full h-px bg-gray-700" />
         <ToolpathsPanel />

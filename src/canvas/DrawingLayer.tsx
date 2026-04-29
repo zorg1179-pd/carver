@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useMemo } from 'react'
 import { Layer, Transformer } from 'react-konva'
 import Konva from 'konva'
 import ShapeNode from './ShapeNode'
@@ -13,28 +13,49 @@ interface Props {
 export default function DrawingLayer({ previewShape }: Props) {
   const layerRef = useRef<Konva.Layer>(null)
   const trRef    = useRef<Konva.Transformer>(null)
-  const { shapes, selectedIds, setSelectedId, addToSelection } = useDocumentStore()
+  const { shapes, selectedIds, setSelectedId, addToSelection, layers } = useDocumentStore()
   const { nodeEditShapeId } = useUIStore()
 
-  // Attach transformer to selected non-line nodes; hide when node-editing
+  // Build O(1) lookup sets for hidden and locked layer IDs
+  const hiddenIds = useMemo(
+    () => new Set(layers.filter((l) => !l.visible).map((l) => l.id)),
+    [layers],
+  )
+  const lockedIds = useMemo(
+    () => new Set(layers.filter((l) => l.locked).map((l) => l.id)),
+    [layers],
+  )
+
+  /** Shapes on hidden layers are not rendered at all. */
+  const visibleShapes = useMemo(
+    () => shapes.filter((s) => !hiddenIds.has(s.layerId ?? 'default')),
+    [shapes, hiddenIds],
+  )
+
+  // Attach transformer to selected non-line nodes; hide it while node-editing
   useEffect(() => {
     if (!trRef.current || !layerRef.current) return
     const nodes = nodeEditShapeId
       ? []
       : selectedIds
-          .filter(id => shapes.find(s => s.id === id)?.type !== 'line')
-          .map(id => layerRef.current!.findOne<Konva.Node>('#' + id))
+          .filter((id) => {
+            const shape = shapes.find((s) => s.id === id)
+            // Exclude lines (no transformer handles) and shapes on locked layers
+            return shape?.type !== 'line' && !lockedIds.has(shape?.layerId ?? 'default')
+          })
+          .map((id) => layerRef.current!.findOne<Konva.Node>('#' + id))
           .filter((n): n is Konva.Node => n != null)
     trRef.current.nodes(nodes)
-  }, [selectedIds, shapes, nodeEditShapeId])
+  }, [selectedIds, shapes, nodeEditShapeId, lockedIds])
 
   return (
     <Layer ref={layerRef}>
-      {shapes.map((shape) => (
+      {visibleShapes.map((shape) => (
         <ShapeNode
           key={shape.id}
           shape={shape}
           isSelected={selectedIds.includes(shape.id)}
+          isLocked={lockedIds.has(shape.layerId ?? 'default')}
           onSelect={(addMode) =>
             addMode ? addToSelection(shape.id) : setSelectedId(shape.id)
           }
@@ -46,6 +67,7 @@ export default function DrawingLayer({ previewShape }: Props) {
           key="__preview__"
           shape={previewShape}
           isSelected={false}
+          isLocked={false}
           onSelect={() => {}}
           isPreview
         />

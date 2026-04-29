@@ -13,9 +13,10 @@ interface Props {
   isSelected: boolean
   onSelect: (addToSelection: boolean) => void
   isPreview?: boolean
+  isLocked?: boolean
 }
 
-export default function ShapeNode({ shape, isSelected, onSelect, isPreview }: Props) {
+export default function ShapeNode({ shape, isSelected, onSelect, isPreview, isLocked }: Props) {
   const { updateShape } = useDocumentStore()
   const { currentTool, snapEnabled, snapGridSize, nodeEditShapeId } = useUIStore()
 
@@ -31,7 +32,8 @@ export default function ShapeNode({ shape, isSelected, onSelect, isPreview }: Pr
   }
 
   const isNodeEditing = nodeEditShapeId === shape.id
-  const draggable = currentTool === 'select' && !isPreview && !isNodeEditing
+  // Locked shapes and node-edit mode shapes cannot be dragged
+  const draggable = currentTool === 'select' && !isPreview && !isNodeEditing && !isLocked
   // Shapes are non-interactive in draw mode so clicks reach the Stage
   const listening = currentTool === 'select' || isPreview === true ? true : false
 
