@@ -117,6 +117,19 @@ export interface Toolpath {
   moves: Move[]
 }
 
+// ── Machine profiles ──────────────────────────────────────────────────────────
+
+export interface MachineProfile {
+  id: string
+  name: string
+  bedWidth: number
+  bedHeight: number
+  units: Units
+  safeHeight: number
+  originPosition: 'front-left' | 'center'
+  isBuiltIn: boolean
+}
+
 // ── Tool & material library ───────────────────────────────────────────────────
 
 export interface ToolProfile {
