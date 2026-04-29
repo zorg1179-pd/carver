@@ -22,13 +22,13 @@ export function parseStatusResponse(line: string): StatusResponse | null {
   for (const part of parts.slice(1)) {
     if (part.startsWith('WPos:')) {
       const c = part.slice(5).split(',').map(Number)
-      if (c.length >= 3) workPos = { x: c[0], y: c[1], z: c[2] }
+      if (c.length >= 3 && c.every(Number.isFinite)) workPos = { x: c[0], y: c[1], z: c[2] }
     } else if (part.startsWith('MPos:')) {
       const c = part.slice(5).split(',').map(Number)
-      if (c.length >= 3) machinePos = { x: c[0], y: c[1], z: c[2] }
+      if (c.length >= 3 && c.every(Number.isFinite)) machinePos = { x: c[0], y: c[1], z: c[2] }
     } else if (part.startsWith('WCO:')) {
       const c = part.slice(4).split(',').map(Number)
-      if (c.length >= 3) wco = { x: c[0], y: c[1], z: c[2] }
+      if (c.length >= 3 && c.every(Number.isFinite)) wco = { x: c[0], y: c[1], z: c[2] }
     }
   }
 
@@ -51,7 +51,7 @@ export function parseControllerName(line: string): string | null {
   const fluidMatch = line.match(/^\[VER:[\d.]+:(.+)\]$/)
   if (fluidMatch) return fluidMatch[1]
 
-  // GRBL: [VER:1.1f.20170801:]
+  // GRBL: [VER:1.1f.20170801:] — checked after FluidNC since this regex also matches FluidNC lines
   const grblMatch = line.match(/^\[VER:([\w.]+):/)
   if (grblMatch) return `GRBL ${grblMatch[1]}`
 
