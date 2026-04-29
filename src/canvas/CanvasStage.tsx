@@ -5,6 +5,7 @@ import MachineBed from './MachineBed'
 import DrawingLayer from './DrawingLayer'
 import ToolpathLayer from './ToolpathLayer'
 import NodeEditLayer from './NodeEditLayer'
+import MachinePositionLayer from './MachinePositionLayer'
 import { useDrawingTool } from './useDrawingTool'
 import { useMachineStore, useDocumentStore, useToolpathStore } from '@/stores'
 import { useUIStore, TEXT_FONTS } from '@/stores/useUIStore'
@@ -385,6 +386,7 @@ export default function CanvasStage() {
           <DrawingLayer previewShape={drawing.previewShape} />
           <ToolpathLayer />
           <NodeEditLayer scale={transform.scale} />
+          <MachinePositionLayer scale={transform.scale} />
         </Stage>
 
       </div>
