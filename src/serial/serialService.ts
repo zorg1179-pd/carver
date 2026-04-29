@@ -129,6 +129,7 @@ export async function disconnect(): Promise<void> {
   waitingForOk = false
   try {
     await portReader?.cancel()
+    portReader = null
     writer?.releaseLock()
     writer = null
     await port?.close()
