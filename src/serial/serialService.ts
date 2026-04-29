@@ -146,9 +146,45 @@ export async function disconnect(): Promise<void> {
   })
 }
 
-// Stubbed — implemented in Task 5
-export async function startJob(_gcode: string): Promise<void> {}
-export function pauseJob(): void {}
-export function resumeJob(): void {}
-export function cancelJob(): void {}
-export function skipToLine(_line: number): void {}
+export async function startJob(gcode: string): Promise<void> {
+  if (useSerialStore.getState().status !== 'connected') return
+  const lines = gcode
+    .split('\n')
+    .map((l) => l.replace(/;.*$/, '').trim())
+    .filter((l) => l.length > 0)
+  allLines  = lines
+  sendQueue = [...lines]
+  waitingForOk = false
+  useSerialStore.setState({ totalLines: lines.length, currentLine: 0, status: 'running', errorMsg: null })
+  flushQueue()
+}
+
+export function pauseJob(): void {
+  if (useSerialStore.getState().status !== 'running') return
+  useSerialStore.setState({ status: 'paused' })
+  writer?.write(enc.encode('!')).catch(() => {})
+}
+
+export function resumeJob(): void {
+  if (useSerialStore.getState().status !== 'paused') return
+  useSerialStore.setState({ status: 'running' })
+  writer?.write(enc.encode('~')).catch(() => {})
+  flushQueue()
+}
+
+export function cancelJob(): void {
+  const { status } = useSerialStore.getState()
+  if (status !== 'running' && status !== 'paused') return
+  sendQueue    = []
+  waitingForOk = false
+  writer?.write(enc.encode('\x18')).catch(() => {})
+  useSerialStore.setState({ status: 'connected', currentLine: 0, totalLines: 0, errorMsg: null })
+}
+
+export function skipToLine(line: number): void {
+  if (useSerialStore.getState().status !== 'paused') return
+  const clamped = Math.max(0, Math.min(line, allLines.length))
+  sendQueue    = allLines.slice(clamped)
+  waitingForOk = false
+  useSerialStore.setState({ currentLine: clamped })
+}
