@@ -111,6 +111,11 @@ describe('deleteNode', () => {
     const data = 'M0,0 L10,0 L20,0'
     expect(deleteNode(data, 0)).toBe(data)
   })
+
+  it('preserves closure when deleting a middle node from a closed path', () => {
+    const result = deleteNode('M0,0 L10,0 L20,10 Z', 1)
+    expect(result.trim()).toMatch(/Z$/)
+  })
 })
 
 describe('breakPath', () => {
@@ -177,5 +182,15 @@ describe('weldNearestEndpoints', () => {
     const mCount = (result.match(/M/g) ?? []).length
     expect(mCount).toBe(1)
     expect(result).toMatch(/^M0,0/)
+  })
+
+  it('handles paths with near-zero coordinates that serialize in scientific notation', () => {
+    // Manually create a path string with scientific notation coordinates
+    const pathA = 'M0,0 L10,0'
+    const pathB = 'M1e-10,5 L10,5'  // scientific notation in M command
+    // Should not throw and should produce a single continuous path
+    const result = weldNearestEndpoints(pathA, pathB)
+    const mCount = (result.match(/M/g) ?? []).length
+    expect(mCount).toBe(1)
   })
 })

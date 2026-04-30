@@ -344,6 +344,9 @@ export function insertNodeAt(data: string, segmentIdx: number, t: number): strin
 
 // ── deleteNode ────────────────────────────────────────────────────────────────
 export function deleteNode(data: string, nodeIdx: number): string {
+  // Detect closure before normalise() — NORMALIZE_HVZ expands Z → explicit L,
+  // so CLOSE_PATH is never present in the normalised command list.
+  const closed = /[Zz]\s*$/.test(data.trim())
   const cmds = normalise(data)
   const idxs = anchorIndices(cmds)
   if (nodeIdx <= 0 || nodeIdx >= idxs.length) return data
@@ -353,10 +356,8 @@ export function deleteNode(data: string, nodeIdx: number): string {
   const nextCmdIdx = idxs[nodeIdx + 1]
 
   if (nextCmdIdx === undefined) {
-    const tail = cmds[cmds.length - 1]?.type === SVGPathData.CLOSE_PATH
-      ? [{ type: SVGPathData.CLOSE_PATH }]
-      : []
-    return encodeCmds([...cmds.slice(0, thisCmdIdx), ...tail])
+    const encoded = encodeCmds(cmds.slice(0, thisCmdIdx))
+    return closed ? encoded + ' Z' : encoded
   }
 
   const prevAnchor = cmds[prevCmdIdx]
@@ -379,11 +380,12 @@ export function deleteNode(data: string, nodeIdx: number): string {
     : { type: SVGPathData.CURVE_TO, x1: cp1.x, y1: cp1.y, x2: cp2.x, y2: cp2.y,
         x: nextCmd.x, y: nextCmd.y, relative: false }
 
-  return encodeCmds([
+  const encoded = encodeCmds([
     ...cmds.slice(0, thisCmdIdx),
     newSeg,
     ...cmds.slice(nextCmdIdx + 1),
   ])
+  return closed ? encoded + ' Z' : encoded
 }
 
 // ── breakPath ─────────────────────────────────────────────────────────────────
@@ -394,13 +396,12 @@ export function breakPath(data: string, nodeIdx: number): [string, string] {
 
   const breakIdx = idxs[nodeIdx]
   const breakCmd = cmds[breakIdx]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const noClose  = (c: any) => c.type !== SVGPathData.CLOSE_PATH
 
-  const path1 = cmds.slice(0, breakIdx + 1).filter(noClose)
+  // NORMALIZE_HVZ removes CLOSE_PATH tokens, so no filter needed here.
+  const path1 = cmds.slice(0, breakIdx + 1)
   const path2 = [
     { type: SVGPathData.MOVE_TO, x: breakCmd.x, y: breakCmd.y, relative: false },
-    ...cmds.slice(breakIdx + 1).filter(noClose),
+    ...cmds.slice(breakIdx + 1),
   ]
 
   return [encodeCmds(path1), encodeCmds(path2)]
@@ -499,8 +500,12 @@ export function weldNearestEndpoints(dataA: string, dataB: string): string {
   const startB = pathEndpoints(b).start
   const SNAP   = 0.01
 
+  // Strip the leading M from b using a normalise/encodeCmds round-trip rather than
+  // a regex, so that coordinates in scientific notation (e.g. 1e-10) are handled correctly.
+  const bTail = encodeCmds(normalise(b.trim()).slice(1))
+
   if (Math.hypot(endA.x - startB.x, endA.y - startB.y) < SNAP) {
-    return a.trim() + ' ' + b.trim().replace(/^M[-\d.,\s]+\s*/, '')
+    return a.trim() + ' ' + bTail
   }
-  return a.trim() + ` L${startB.x},${startB.y} ` + b.trim().replace(/^M[-\d.,\s]+\s*/, '')
+  return a.trim() + ` L${startB.x},${startB.y} ` + bTail
 }
