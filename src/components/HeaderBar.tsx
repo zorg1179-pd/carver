@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
-import { FilePlus, FolderOpen, Save, AlertCircle, Undo2, Redo2, Plug, PlugZap } from 'lucide-react'
+import { FilePlus, FolderOpen, Save, AlertCircle, Undo2, Redo2, Plug, PlugZap, CircleHelp } from 'lucide-react'
 import { useDocumentStore } from '@/stores'
 import { useSerialStore } from '@/stores/useSerialStore'
 import { connect, disconnect } from '@/serial/serialService'
@@ -11,10 +11,11 @@ interface Props {
   onNew: () => void
   onSaveToFile: () => void
   onLoadFromFile: (file: File) => void
+  onOpenHelp: () => void
 }
 
 export default function HeaderBar({
-  isDirty, lastSavedAt, loadError, onNew, onSaveToFile, onLoadFromFile,
+  isDirty, lastSavedAt, loadError, onNew, onSaveToFile, onLoadFromFile, onOpenHelp,
 }: Props) {
   const fileInputRef  = useRef<HTMLInputElement>(null)
   const popoverRef    = useRef<HTMLDivElement>(null)
@@ -164,7 +165,15 @@ export default function HeaderBar({
         </button>
       )}
 
-      <div className="ml-auto flex items-center gap-2 text-[10px]">
+      <button
+        onClick={onOpenHelp}
+        title="Keyboard shortcuts  (?)"
+        className="ml-auto flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:text-white hover:bg-gray-800 transition-colors"
+      >
+        <CircleHelp size={12} /> ?
+      </button>
+
+      <div className="flex items-center gap-2 text-[10px]">
         {loadError && (
           <span className="flex items-center gap-1 text-red-400">
             <AlertCircle size={11} />

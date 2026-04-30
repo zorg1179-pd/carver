@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, lazy, Suspense } from 'react'
+import { useRef, useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { Upload, AlertTriangle, CheckCircle } from 'lucide-react'
 import { clsx } from 'clsx'
 import CanvasStage from '@/canvas/CanvasStage'
@@ -14,6 +14,7 @@ import GcodePanel      from '@/components/panels/GcodePanel'
 import { useSvgImport } from '@/hooks/useSvgImport'
 import { useProjectFile } from '@/hooks/useProjectFile'
 import SerialStatusBar from '@/components/SerialStatusBar'
+import HelpModal from '@/components/HelpModal'
 
 const PreviewPane = lazy(() => import('@/preview/PreviewPane'))
 
@@ -26,6 +27,19 @@ export default function EditorPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragOver, setIsDragOver] = useState(false)
   const [activeView, setActiveView] = useState<ActiveView>('canvas')
+  const [showHelp, setShowHelp] = useState(false)
+
+  const openHelp  = useCallback(() => setShowHelp(true),  [])
+  const closeHelp = useCallback(() => setShowHelp(false), [])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement) return
+      if (e.key === '?') setShowHelp((v) => !v)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   // Auto-dismiss import status after 6 s
   useEffect(() => {
@@ -60,6 +74,7 @@ export default function EditorPage() {
         onNew={newProject}
         onSaveToFile={saveToFile}
         onLoadFromFile={loadFromFile}
+        onOpenHelp={openHelp}
       />
       <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Hidden file input */}
@@ -199,6 +214,8 @@ export default function EditorPage() {
         </div>
       </aside>
       </div>
+
+      {showHelp && <HelpModal onClose={closeHelp} />}
     </div>
   )
 }
