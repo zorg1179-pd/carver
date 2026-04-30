@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
-import { MousePointer, Minus, Square, Circle, Type, type LucideIcon } from 'lucide-react'
+import { MousePointer, Minus, Square, Circle, Type, Pen, type LucideIcon } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useUIStore, type ToolType } from '@/stores/useUIStore'
 
 const TOOLS: { tool: ToolType; Icon: LucideIcon; label: string; key: string }[] = [
   { tool: 'select', Icon: MousePointer, label: 'Select',           key: 'S' },
   { tool: 'line',   Icon: Minus,        label: 'Line / Polyline',  key: 'L' },
+  { tool: 'pen',    Icon: Pen,          label: 'Pen / Bezier',     key: 'P' },
   { tool: 'rect',   Icon: Square,       label: 'Rectangle',        key: 'R' },
   { tool: 'circle', Icon: Circle,       label: 'Circle / Ellipse', key: 'C' },
   { tool: 'text',   Icon: Type,         label: 'Text',             key: 'T' },
@@ -21,6 +22,7 @@ export default function Toolbar() {
       switch (e.key.toLowerCase()) {
         case 's': setCurrentTool('select'); break
         case 'l': setCurrentTool('line');   break
+        case 'p': setCurrentTool('pen');    break
         case 'r': setCurrentTool('rect');   break
         case 'c': setCurrentTool('circle'); break
         case 't': setCurrentTool('text');   break

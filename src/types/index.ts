@@ -84,6 +84,7 @@ export interface PathShape extends BaseShape {
   y?: number
   scaleX?: number
   scaleY?: number
+  nodeTypes?: ('smooth' | 'corner')[]  // indexed by command position after normalize; absence = all corners
 }
 
 export type Shape =

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type ToolType = 'select' | 'line' | 'rect' | 'circle' | 'text'
+export type ToolType = 'select' | 'line' | 'pen' | 'rect' | 'circle' | 'text'
 export type SimSpeed = 'slow' | 'normal' | 'fast'
 
 export const TEXT_FONTS = [

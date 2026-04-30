@@ -224,3 +224,288 @@ export function scanlineX(polys: Polyline[], y: number): number[] {
   }
   return xs
 }
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function encodeCmds(cmds: any[]): string {
+  return cmds.map(cmd => {
+    switch (cmd.type) {
+      case SVGPathData.MOVE_TO:    return `M${cmd.x},${cmd.y}`
+      case SVGPathData.LINE_TO:    return `L${cmd.x},${cmd.y}`
+      case SVGPathData.CURVE_TO:   return `C${cmd.x1},${cmd.y1} ${cmd.x2},${cmd.y2} ${cmd.x},${cmd.y}`
+      case SVGPathData.CLOSE_PATH: return 'Z'
+      default: return ''
+    }
+  }).filter(Boolean).join(' ')
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalise(data: string): any[] {
+  return (new SVGPathData(data) as any)
+    .transform(SVGPathDataTransformer.TO_ABS())
+    .transform(SVGPathDataTransformer.NORMALIZE_HVZ())
+    .transform(SVGPathDataTransformer.NORMALIZE_ST())
+    .commands
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function anchorIndices(cmds: any[]): number[] {
+  return cmds.reduce<number[]>((acc, cmd, i) => {
+    if (cmd.type === SVGPathData.MOVE_TO  ||
+        cmd.type === SVGPathData.LINE_TO  ||
+        cmd.type === SVGPathData.CURVE_TO) acc.push(i)
+    return acc
+  }, [])
+}
+
+// ── reversePath ───────────────────────────────────────────────────────────────
+export function reversePath(data: string): string {
+  const cmds = normalise(data)
+  // Detect closure from original string: NORMALIZE_HVZ expands Z → explicit L,
+  // so cmds no longer ends with CLOSE_PATH after normalization.
+  const closed = /[Zz]\s*$/.test(data.trim())
+  // Drop the Z-expanded closing L so we don't duplicate it when reversing
+  const working = closed ? cmds.slice(0, -1) : cmds
+  if (working.length === 0) return data
+
+  const last = working[working.length - 1]
+  const parts: string[] = [`M${last.x},${last.y}`]
+
+  for (let i = working.length - 1; i >= 1; i--) {
+    const prev = working[i - 1]
+    const curr = working[i]
+    const dx = (prev as any).x
+    const dy = (prev as any).y
+    if (curr.type === SVGPathData.LINE_TO || curr.type === SVGPathData.MOVE_TO) {
+      parts.push(`L${dx},${dy}`)
+    } else if (curr.type === SVGPathData.CURVE_TO) {
+      parts.push(`C${(curr as any).x2},${(curr as any).y2} ${(curr as any).x1},${(curr as any).y1} ${dx},${dy}`)
+    }
+  }
+  if (closed) parts.push('Z')
+  return parts.join(' ')
+}
+
+// ── openClosePath ─────────────────────────────────────────────────────────────
+export function openClosePath(data: string): string {
+  const t = data.trim()
+  if (/[Zz]$/.test(t)) return t.slice(0, -1).trim()
+  return t + ' Z'
+}
+
+// ── joinPaths ─────────────────────────────────────────────────────────────────
+export function joinPaths(parts: string[]): string {
+  return parts.join(' ')
+}
+
+// ── insertNodeAt ──────────────────────────────────────────────────────────────
+export function insertNodeAt(data: string, segmentIdx: number, t: number): string {
+  const cmds = normalise(data)
+  const idxs = anchorIndices(cmds)
+  const fromIdx = idxs[segmentIdx]
+  const toIdx   = idxs[segmentIdx + 1]
+  if (toIdx === undefined) return data
+
+  const from = cmds[fromIdx]
+  const to   = cmds[toIdx]
+  const lerp = (a: number, b: number, u: number) => a + (b - a) * u
+  const lp   = (ax: number, ay: number, bx: number, by: number, u: number) =>
+    ({ x: lerp(ax, bx, u), y: lerp(ay, by, u) })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let inserted: any[]
+  if (to.type === SVGPathData.LINE_TO) {
+    const s = lp(from.x, from.y, to.x, to.y, t)
+    inserted = [
+      { type: SVGPathData.LINE_TO, x: s.x,  y: s.y,  relative: false },
+      { type: SVGPathData.LINE_TO, x: to.x, y: to.y, relative: false },
+    ]
+  } else if (to.type === SVGPathData.CURVE_TO) {
+    const p0 = { x: from.x, y: from.y }
+    const p1 = { x: to.x1,  y: to.y1  }
+    const p2 = { x: to.x2,  y: to.y2  }
+    const p3 = { x: to.x,   y: to.y   }
+    const q0 = lp(p0.x, p0.y, p1.x, p1.y, t)
+    const q1 = lp(p1.x, p1.y, p2.x, p2.y, t)
+    const q2 = lp(p2.x, p2.y, p3.x, p3.y, t)
+    const r0 = lp(q0.x, q0.y, q1.x, q1.y, t)
+    const r1 = lp(q1.x, q1.y, q2.x, q2.y, t)
+    const s  = lp(r0.x, r0.y, r1.x, r1.y, t)
+    inserted = [
+      { type: SVGPathData.CURVE_TO, x1: q0.x, y1: q0.y, x2: r0.x, y2: r0.y, x: s.x,  y: s.y,  relative: false },
+      { type: SVGPathData.CURVE_TO, x1: r1.x, y1: r1.y, x2: q2.x, y2: q2.y, x: p3.x, y: p3.y, relative: false },
+    ]
+  } else {
+    return data
+  }
+
+  return encodeCmds([...cmds.slice(0, toIdx), ...inserted, ...cmds.slice(toIdx + 1)])
+}
+
+// ── deleteNode ────────────────────────────────────────────────────────────────
+export function deleteNode(data: string, nodeIdx: number): string {
+  // Detect closure before normalise() — NORMALIZE_HVZ expands Z → explicit L,
+  // so CLOSE_PATH is never present in the normalised command list.
+  const closed = /[Zz]\s*$/.test(data.trim())
+  const cmds = normalise(data)
+  const idxs = anchorIndices(cmds)
+  if (nodeIdx <= 0 || nodeIdx >= idxs.length) return data
+
+  const prevCmdIdx = idxs[nodeIdx - 1]
+  const thisCmdIdx = idxs[nodeIdx]
+  const nextCmdIdx = idxs[nodeIdx + 1]
+
+  if (nextCmdIdx === undefined) {
+    const encoded = encodeCmds(cmds.slice(0, thisCmdIdx))
+    return closed ? encoded + ' Z' : encoded
+  }
+
+  const prevAnchor = cmds[prevCmdIdx]
+  const thisCmd    = cmds[thisCmdIdx]
+  const nextCmd    = cmds[nextCmdIdx]
+
+  const cp1 = thisCmd.type === SVGPathData.CURVE_TO
+    ? { x: thisCmd.x1, y: thisCmd.y1 }
+    : { x: prevAnchor.x, y: prevAnchor.y }
+
+  const cp2 = nextCmd.type === SVGPathData.CURVE_TO
+    ? { x: nextCmd.x2, y: nextCmd.y2 }
+    : { x: nextCmd.x,  y: nextCmd.y  }
+
+  const isLine = cp1.x === prevAnchor.x && cp1.y === prevAnchor.y
+              && cp2.x === nextCmd.x    && cp2.y === nextCmd.y
+
+  const newSeg = isLine
+    ? { type: SVGPathData.LINE_TO, x: nextCmd.x, y: nextCmd.y, relative: false }
+    : { type: SVGPathData.CURVE_TO, x1: cp1.x, y1: cp1.y, x2: cp2.x, y2: cp2.y,
+        x: nextCmd.x, y: nextCmd.y, relative: false }
+
+  const encoded = encodeCmds([
+    ...cmds.slice(0, thisCmdIdx),
+    newSeg,
+    ...cmds.slice(nextCmdIdx + 1),
+  ])
+  return closed ? encoded + ' Z' : encoded
+}
+
+// ── breakPath ─────────────────────────────────────────────────────────────────
+export function breakPath(data: string, nodeIdx: number): [string, string] {
+  const cmds = normalise(data)
+  const idxs = anchorIndices(cmds)
+  if (nodeIdx <= 0 || nodeIdx >= idxs.length - 1) return [data, '']
+
+  const breakIdx = idxs[nodeIdx]
+  const breakCmd = cmds[breakIdx]
+
+  // NORMALIZE_HVZ removes CLOSE_PATH tokens, so no filter needed here.
+  const path1 = cmds.slice(0, breakIdx + 1)
+  const path2 = [
+    { type: SVGPathData.MOVE_TO, x: breakCmd.x, y: breakCmd.y, relative: false },
+    ...cmds.slice(breakIdx + 1),
+  ]
+
+  return [encodeCmds(path1), encodeCmds(path2)]
+}
+
+// ── convertSegment ────────────────────────────────────────────────────────────
+export function convertSegment(data: string, segmentIdx: number): string {
+  const cmds = normalise(data)
+  const idxs = anchorIndices(cmds)
+  const fromIdx = idxs[segmentIdx]
+  const toIdx   = idxs[segmentIdx + 1]
+  if (toIdx === undefined) return data
+
+  const from = cmds[fromIdx]
+  const to   = cmds[toIdx]
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let newCmd: any
+  if (to.type === SVGPathData.LINE_TO) {
+    newCmd = {
+      type: SVGPathData.CURVE_TO,
+      x1: from.x + (to.x - from.x) / 3,
+      y1: from.y + (to.y - from.y) / 3,
+      x2: from.x + 2 * (to.x - from.x) / 3,
+      y2: from.y + 2 * (to.y - from.y) / 3,
+      x: to.x, y: to.y, relative: false,
+    }
+  } else if (to.type === SVGPathData.CURVE_TO) {
+    newCmd = { type: SVGPathData.LINE_TO, x: to.x, y: to.y, relative: false }
+  } else {
+    return data
+  }
+
+  return encodeCmds([...cmds.slice(0, toIdx), newCmd, ...cmds.slice(toIdx + 1)])
+}
+
+// ── findSegmentHit ────────────────────────────────────────────────────────────
+export function findSegmentHit(
+  data: string,
+  px: number, py: number,
+  threshold: number,
+): { segmentIdx: number; t: number } | null {
+  const cmds = normalise(data)
+  const idxs = anchorIndices(cmds)
+  const SAMPLES = 20
+
+  for (let seg = 0; seg < idxs.length - 1; seg++) {
+    const from  = cmds[idxs[seg]]
+    const toCmd = cmds[idxs[seg + 1]]
+    let best = Infinity, bestT = 0
+
+    for (let k = 0; k <= SAMPLES; k++) {
+      const u = k / SAMPLES
+      let bx: number, by: number
+      if (toCmd.type === SVGPathData.LINE_TO) {
+        bx = from.x + (toCmd.x - from.x) * u
+        by = from.y + (toCmd.y - from.y) * u
+      } else if (toCmd.type === SVGPathData.CURVE_TO) {
+        const mt = 1 - u
+        bx = mt*mt*mt*from.x + 3*mt*mt*u*toCmd.x1 + 3*mt*u*u*toCmd.x2 + u*u*u*toCmd.x
+        by = mt*mt*mt*from.y + 3*mt*mt*u*toCmd.y1 + 3*mt*u*u*toCmd.y2 + u*u*u*toCmd.y
+      } else continue
+      const d = Math.hypot(px - bx, py - by)
+      if (d < best) { best = d; bestT = u }
+    }
+    if (best <= threshold) return { segmentIdx: seg, t: bestT }
+  }
+  return null
+}
+
+// ── weldNearestEndpoints ──────────────────────────────────────────────────────
+function pathEndpoints(data: string): { start: { x:number;y:number }; end: { x:number;y:number } } {
+  const cmds = normalise(data)
+  const idxs = anchorIndices(cmds)
+  const first = cmds[idxs[0]]
+  const last  = cmds[idxs[idxs.length - 1]]
+  return { start: { x: first.x, y: first.y }, end: { x: last.x, y: last.y } }
+}
+
+export function weldNearestEndpoints(dataA: string, dataB: string): string {
+  const epA = pathEndpoints(dataA)
+  const epB = pathEndpoints(dataB)
+  const d   = (a: {x:number;y:number}, b: {x:number;y:number}) => Math.hypot(a.x-b.x, a.y-b.y)
+
+  const opts = [
+    { distAB: d(epA.end,   epB.start), aRev: false, bRev: false },
+    { distAB: d(epA.end,   epB.end),   aRev: false, bRev: true  },
+    { distAB: d(epA.start, epB.start), aRev: true,  bRev: false },
+    { distAB: d(epA.start, epB.end),   aRev: true,  bRev: true  },
+  ].sort((a, b) => a.distAB - b.distAB)[0]
+
+  const a = opts.aRev ? reversePath(dataA) : dataA
+  const b = opts.bRev ? reversePath(dataB) : dataB
+
+  const endA   = pathEndpoints(a).end
+  const startB = pathEndpoints(b).start
+  const SNAP   = 0.01
+
+  // Strip the leading M from b using a normalise/encodeCmds round-trip rather than
+  // a regex, so that coordinates in scientific notation (e.g. 1e-10) are handled correctly.
+  const bTail = encodeCmds(normalise(b.trim()).slice(1))
+
+  if (Math.hypot(endA.x - startB.x, endA.y - startB.y) < SNAP) {
+    return a.trim() + ' ' + bTail
+  }
+  return a.trim() + ` L${startB.x},${startB.y} ` + bTail
+}

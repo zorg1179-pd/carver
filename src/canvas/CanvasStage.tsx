@@ -7,6 +7,7 @@ import ToolpathLayer from './ToolpathLayer'
 import NodeEditLayer from './NodeEditLayer'
 import MachinePositionLayer from './MachinePositionLayer'
 import { useDrawingTool } from './useDrawingTool'
+import { usePenTool } from './usePenTool'
 import { useMachineStore, useDocumentStore, useToolpathStore } from '@/stores'
 import { useUIStore, TEXT_FONTS } from '@/stores/useUIStore'
 import { useCanvasTransform } from '@/hooks/useCanvasTransform'
@@ -85,6 +86,7 @@ export default function CanvasStage() {
   } = useUIStore()
   const { transform, setTransform, fitToView } = useCanvasTransform(bedWidth, bedHeight)
   const drawing = useDrawingTool()
+  const pen = usePenTool()
 
   const transformRef = useRef(transform)
   transformRef.current = transform
@@ -138,6 +140,7 @@ export default function CanvasStage() {
           return
         }
         drawing.cancel()
+        pen.cancel()
         clearSelection()
         setCurrentTool('select')
       }
@@ -165,7 +168,7 @@ export default function CanvasStage() {
       window.removeEventListener('keydown', onDown)
       window.removeEventListener('keyup', onUp)
     }
-  }, [fitToView, selectedIds, drawing, setSelectedId, clearSelection, setCurrentTool, removeSelectedShapes, undo, redo, setSnapEnabled, setNodeEditShapeId])
+  }, [fitToView, selectedIds, drawing, pen, setSelectedId, clearSelection, setCurrentTool, removeSelectedShapes, undo, redo, setSnapEnabled, setNodeEditShapeId])
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
   const snapEnabledRef = useRef(snapEnabled)
@@ -214,7 +217,8 @@ export default function CanvasStage() {
     }
     // Left click in draw mode
     if (e.evt.button === 0 && currentTool !== 'select') {
-      drawing.onPointerDown(getCanvasPt())
+      if (currentTool === 'pen') pen.onPointerDown(getCanvasPt())
+      else drawing.onPointerDown(getCanvasPt())
       return
     }
     // Left click on empty canvas in select mode → start drag select
@@ -239,7 +243,8 @@ export default function CanvasStage() {
       setDragRect({ x1: o.x, y1: o.y, x2: pt.x, y2: pt.y })
     }
     if (currentTool !== 'select') {
-      drawing.onPointerMove(getCanvasPt())
+      if (currentTool === 'pen') pen.onPointerMove(getCanvasPt())
+      else drawing.onPointerMove(getCanvasPt())
     }
     // Update status bar (Y flipped to match CNC convention)
     const stage = stageRef.current
@@ -281,7 +286,8 @@ export default function CanvasStage() {
       setDragRect(null)
     }
     if (e.evt.button === 0 && currentTool !== 'select') {
-      drawing.onPointerUp(getCanvasPt())
+      if (currentTool === 'pen') pen.onPointerUp(getCanvasPt())
+      else drawing.onPointerUp(getCanvasPt())
     }
   }
 
@@ -308,10 +314,8 @@ export default function CanvasStage() {
   }
 
   const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (currentTool === 'line') {
-      drawing.onDoubleClick()
-      return
-    }
+    if (currentTool === 'line') { drawing.onDoubleClick(); return }
+    if (currentTool === 'pen')  { pen.onDoubleClick();     return }
     if (currentTool === 'select' && e.target !== stageRef.current) {
       const id = e.target.id()
       const shape = id ? shapes.find(s => s.id === id) : null
@@ -383,7 +387,7 @@ export default function CanvasStage() {
           <Layer>
             <MachineBed width={bedWidth} height={bedHeight} scale={transform.scale} />
           </Layer>
-          <DrawingLayer previewShape={drawing.previewShape} />
+          <DrawingLayer previewShape={currentTool === 'pen' ? pen.previewShape : drawing.previewShape} />
           <ToolpathLayer />
           <NodeEditLayer scale={transform.scale} />
           <MachinePositionLayer scale={transform.scale} />

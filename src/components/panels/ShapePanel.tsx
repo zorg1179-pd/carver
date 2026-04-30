@@ -1,9 +1,9 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { XCircle, FlipHorizontal, FlipVertical } from 'lucide-react'
 import { useDocumentStore, useMachineStore, useMaterialStore, useToolStore } from '@/stores'
 import type { CutConfig, ContourSide, OperationType, PathShape, Shape, ShapeUpdate } from '@/types'
 import { pathBBox } from '@/svg/parseSvg'
-import { shapeToPathData } from '@/toolpath/pathUtils'
+import { shapeToPathData, openClosePath, reversePath, joinPaths, weldNearestEndpoints } from '@/toolpath/pathUtils'
 import { subtractPaths, unitePaths, intersectPaths } from '@/toolpath/booleanOps'
 import NumberField from '@/components/ui/NumberField'
 import SelectField from '@/components/ui/SelectField'
@@ -372,6 +372,65 @@ function CutConfigEditor({ cfg, units, onChange }: CfgEditorProps) {
   )
 }
 
+// ── Path operations section ────────────────────────────────────────────────
+interface PathOpsSectionProps {
+  selectedPaths: PathShape[]
+  updateShape: (id: string, update: { data: string }) => void
+  replaceShapesWithOne: (ids: string[], shape: PathShape) => void
+  weld: () => void
+}
+
+function PathOpsSection({ selectedPaths, updateShape, replaceShapesWithOne, weld }: PathOpsSectionProps) {
+  if (selectedPaths.length === 0) return null
+  return (
+    <PanelSection title="Path">
+      {selectedPaths.length === 1 && (
+        <>
+          <button
+            className="w-full text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded px-2 py-1 text-left transition-colors"
+            onClick={() => updateShape(selectedPaths[0].id, { data: openClosePath(selectedPaths[0].data) })}
+          >
+            {selectedPaths[0].data.trim().match(/[Zz]$/) ? 'Open Path' : 'Close Path'}
+          </button>
+          <button
+            className="w-full text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded px-2 py-1 text-left transition-colors mt-1"
+            onClick={() => updateShape(selectedPaths[0].id, { data: reversePath(selectedPaths[0].data) })}
+          >
+            Reverse Direction
+          </button>
+        </>
+      )}
+      {selectedPaths.length >= 2 && (
+        <button
+          className="w-full text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded px-2 py-1 text-left transition-colors"
+          onClick={() => {
+            const merged = joinPaths(selectedPaths.map(s => s.data))
+            replaceShapesWithOne(
+              selectedPaths.map(s => s.id),
+              {
+                id: crypto.randomUUID(), type: 'path',
+                data: merged, style: selectedPaths[0].style,
+                layerId: selectedPaths[0].layerId,
+              } as PathShape,
+            )
+          }}
+        >
+          Join Paths
+        </button>
+      )}
+      {selectedPaths.length === 2 && (
+        <button
+          className="w-full text-xs bg-blue-700 hover:bg-blue-600 text-white rounded px-2 py-1 text-left transition-colors mt-1"
+          title="Weld nearest endpoints (W)"
+          onClick={weld}
+        >
+          Weld Endpoints  <kbd className="text-blue-300 text-[10px]">W</kbd>
+        </button>
+      )}
+    </PanelSection>
+  )
+}
+
 // ── Main panel ─────────────────────────────────────────────────────────────
 export default function ShapePanel() {
   const { shapes, selectedIds, updateShape, updateShapes, replaceShapesWithOne } = useDocumentStore()
@@ -383,6 +442,33 @@ export default function ShapePanel() {
     () => shapes.filter(s => selectedIds.includes(s.id)),
     [shapes, selectedIds],
   )
+
+  const selectedPaths = useMemo(
+    () => selected.filter(s => s.type === 'path') as PathShape[],
+    [selected],
+  )
+
+  const weld = useCallback(() => {
+    if (selectedPaths.length !== 2) return
+    const [a, b] = selectedPaths
+    const merged = weldNearestEndpoints(a.data, b.data)
+    replaceShapesWithOne([a.id, b.id], {
+      id: crypto.randomUUID(), type: 'path',
+      data: merged, style: a.style, layerId: a.layerId,
+    } as PathShape)
+  }, [selectedPaths, replaceShapesWithOne])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement) return
+      if (e.code === 'KeyW' && selectedPaths.length === 2) {
+        e.preventDefault()
+        weld()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [weld, selectedPaths])
 
   // ── No selection ──────────────────────────────────────────────────────────
   if (selected.length === 0) {
@@ -413,42 +499,45 @@ export default function ShapePanel() {
     }
 
     return (
-      <PanelSection title="Shape">
-        <div className="text-[10px] text-gray-400 space-y-0.5">
-          <div><span className="text-gray-500">Type  </span>{shape.type}</div>
-          {bounds && (
-            <div>
-              <span className="text-gray-500">Size  </span>
-              {bounds.w.toFixed(2)} × {bounds.h.toFixed(2)} {units}
-            </div>
-          )}
+      <>
+        <PanelSection title="Shape">
+          <div className="text-[10px] text-gray-400 space-y-0.5">
+            <div><span className="text-gray-500">Type  </span>{shape.type}</div>
+            {bounds && (
+              <div>
+                <span className="text-gray-500">Size  </span>
+                {bounds.w.toFixed(2)} × {bounds.h.toFixed(2)} {units}
+              </div>
+            )}
+            {holes.length > 0 && (
+              <div className="text-blue-400">
+                Nested pocket · {holes.length} hole{holes.length!==1?'s':''}
+              </div>
+            )}
+          </div>
+          <div className="w-full h-px bg-gray-700" />
+          <TransformEditor shape={shape} units={units} onChange={u => updateShape(shape.id, u)} />
+          <div className="w-full h-px bg-gray-700" />
+          <CutConfigEditor cfg={cfg} units={units} onChange={patch} />
           {holes.length > 0 && (
-            <div className="text-blue-400">
-              Nested pocket · {holes.length} hole{holes.length!==1?'s':''}
-            </div>
+            <button
+              onClick={() => patch({ holeShapeIds: undefined })}
+              className="text-[10px] text-red-400 hover:text-red-300 text-left"
+            >
+              Remove holes
+            </button>
           )}
-        </div>
-        <div className="w-full h-px bg-gray-700" />
-        <TransformEditor shape={shape} units={units} onChange={u => updateShape(shape.id, u)} />
-        <div className="w-full h-px bg-gray-700" />
-        <CutConfigEditor cfg={cfg} units={units} onChange={patch} />
-        {holes.length > 0 && (
-          <button
-            onClick={() => patch({ holeShapeIds: undefined })}
-            className="text-[10px] text-red-400 hover:text-red-300 text-left"
-          >
-            Remove holes
-          </button>
-        )}
-        {shape.cutConfig && (
-          <button
-            onClick={() => updateShape(shape.id, { cutConfig: undefined })}
-            className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-xs text-gray-400 hover:text-red-300 hover:bg-red-900/20 border border-gray-700 hover:border-red-900 transition-colors"
-          >
-            <XCircle size={11} /> Clear operation
-          </button>
-        )}
-      </PanelSection>
+          {shape.cutConfig && (
+            <button
+              onClick={() => updateShape(shape.id, { cutConfig: undefined })}
+              className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-xs text-gray-400 hover:text-red-300 hover:bg-red-900/20 border border-gray-700 hover:border-red-900 transition-colors"
+            >
+              <XCircle size={11} /> Clear operation
+            </button>
+          )}
+        </PanelSection>
+        <PathOpsSection selectedPaths={selectedPaths} updateShape={updateShape} replaceShapesWithOne={replaceShapesWithOne} weld={weld} />
+      </>
     )
   }
 
@@ -522,6 +611,7 @@ export default function ShapePanel() {
   const btnCls = 'flex-1 py-1 text-[10px] rounded border border-gray-600 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors'
 
   return (
+    <>
     <PanelSection title="Shape">
       <div className="text-[10px] text-gray-400 space-y-0.5">
         <div className="text-white font-medium">{selected.length} shapes selected</div>
@@ -579,5 +669,7 @@ export default function ShapePanel() {
       <div className="w-full h-px bg-gray-700" />
       <CutConfigEditor cfg={cfg} units={units} onChange={patchAll} />
     </PanelSection>
+    <PathOpsSection selectedPaths={selectedPaths} updateShape={updateShape} replaceShapesWithOne={replaceShapesWithOne} weld={weld} />
+    </>
   )
 }
