@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Layer, Circle, Line, Rect } from 'react-konva'
 import Konva from 'konva'
 import { SVGPathData, SVGPathDataTransformer } from 'svg-pathdata'
@@ -10,6 +11,9 @@ interface Props { scale: number }
 export default function NodeEditLayer({ scale }: Props) {
   const { nodeEditShapeId, snapEnabled, snapGridSize } = useUIStore()
   const { shapes, updateShape } = useDocumentStore()
+
+  const [selectedNodeIdx, setSelectedNodeIdx] = useState<number | null>(null)
+  const [hoveredSegmentIdx, setHoveredSegmentIdx] = useState<number | null>(null)
 
   if (!nodeEditShapeId) return null
   const shape = shapes.find(s => s.id === nodeEditShapeId)
@@ -126,24 +130,80 @@ export default function NodeEditLayer({ scale }: Props) {
             listening={false}
           />
         ))}
-        {handles.map(h => (
-          <Rect
-            key={`hdl-${h.key}`}
-            x={h.handleCanvas.x} y={h.handleCanvas.y}
-            width={hr * 2} height={hr * 2}
-            offsetX={hr} offsetY={hr}
-            rotation={45}
-            fill="#3b82f6" stroke="#1e3a5f" strokeWidth={hsw}
-            listening={false}
-          />
-        ))}
-        {anchors.map(({ cmdIdx, cx, cy }) => (
+        {handles.map(h => {
+          const hx = h.handleCanvas.x
+          const hy = h.handleCanvas.y
+          return (
+            <Rect
+              key={`hdl-${h.key}`}
+              x={hx} y={hy}
+              width={hr * 2} height={hr * 2}
+              offsetX={hr} offsetY={hr}
+              rotation={45}
+              fill="#3b82f6" stroke="#1e3a5f" strokeWidth={hsw}
+              draggable
+              onDragMove={onDragMove}
+              onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
+                const newHx = (e.target.x() - ox) / sx
+                const newHy = (e.target.y() - oy) / sy
+                const cmd = parsed.commands[h.cmdIdx] as any
+                const nodeType = (s.nodeTypes ?? [])[h.anchorNodeIdx] ?? 'corner'
+                if (h.which === 'cp2') {
+                  cmd.x2 = newHx; cmd.y2 = newHy
+                  if (nodeType === 'smooth') {
+                    const thisAnchor = anchors[h.anchorNodeIdx]
+                    const mirrorX = (thisAnchor.cx - ox) / sx - (newHx - (thisAnchor.cx - ox) / sx)
+                    const mirrorY = (thisAnchor.cy - oy) / sy - (newHy - (thisAnchor.cy - oy) / sy)
+                    for (let j = h.cmdIdx + 1; j < parsed.commands.length; j++) {
+                      const nc = parsed.commands[j] as any
+                      if (nc.type === SVGPathData.CURVE_TO) { nc.x1 = mirrorX; nc.y1 = mirrorY; break }
+                      if (nc.type === SVGPathData.MOVE_TO) break
+                    }
+                  }
+                } else {
+                  cmd.x1 = newHx; cmd.y1 = newHy
+                  if (nodeType === 'smooth') {
+                    const prevAnchor = anchors[h.anchorNodeIdx]
+                    const mirrorX = (prevAnchor.cx - ox) / sx - (newHx - (prevAnchor.cx - ox) / sx)
+                    const mirrorY = (prevAnchor.cy - oy) / sy - (newHy - (prevAnchor.cy - oy) / sy)
+                    cmd.x2 = mirrorX; cmd.y2 = mirrorY
+                  }
+                }
+                updateShape(shape.id, { data: parsed.encode() })
+              }}
+            />
+          )
+        })}
+        {anchors.map(({ cmdIdx, cx, cy }, nodeIdx) => (
           <Circle
             key={cmdIdx}
             x={cx} y={cy}
             radius={r}
-            fill="white" stroke="#3b82f6" strokeWidth={sw}
+            fill={selectedNodeIdx === nodeIdx ? '#3b82f6' : 'white'}
+            stroke="#3b82f6" strokeWidth={sw}
             draggable
+            onClick={() => setSelectedNodeIdx(nodeIdx === selectedNodeIdx ? null : nodeIdx)}
+            onDblClick={() => {
+              const types = [...(s.nodeTypes ?? anchors.map(() => 'corner' as const))]
+              while (types.length <= nodeIdx) types.push('corner')
+              const current = types[nodeIdx] ?? 'corner'
+              types[nodeIdx] = current === 'smooth' ? 'corner' : 'smooth'
+              if (types[nodeIdx] === 'smooth') {
+                const cmd = parsed.commands[cmdIdx] as any
+                if (cmd.type === SVGPathData.CURVE_TO) {
+                  const bwdDx = cmd.x2 - cmd.x, bwdDy = cmd.y2 - cmd.y
+                  for (let j = cmdIdx + 1; j < parsed.commands.length; j++) {
+                    const nc = parsed.commands[j] as any
+                    if (nc.type === SVGPathData.CURVE_TO) {
+                      nc.x1 = cmd.x - bwdDx; nc.y1 = cmd.y - bwdDy
+                      break
+                    }
+                    if (nc.type === SVGPathData.MOVE_TO) break
+                  }
+                }
+              }
+              updateShape(shape.id, { data: parsed.encode(), nodeTypes: types })
+            }}
             onDragMove={onDragMove}
             onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
               const newLx = (e.target.x() - ox) / sx
@@ -156,6 +216,9 @@ export default function NodeEditLayer({ scale }: Props) {
       </Layer>
     )
   }
+
+  // hoveredSegmentIdx is used by NodeEditControls (added in Task 8)
+  void hoveredSegmentIdx
 
   return null
 }
