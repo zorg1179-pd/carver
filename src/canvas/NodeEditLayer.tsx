@@ -4,17 +4,19 @@ import Konva from 'konva'
 import { SVGPathData, SVGPathDataTransformer } from 'svg-pathdata'
 import { useDocumentStore } from '@/stores'
 import { useUIStore } from '@/stores/useUIStore'
-import { findSegmentHit, insertNodeAt } from '@/toolpath/pathUtils'
+import { findSegmentHit, insertNodeAt, weldNearestEndpoints } from '@/toolpath/pathUtils'
 import type { LineShape, PathShape } from '@/types'
+import NodeEditControls from './NodeEditControls'
 
 interface Props { scale: number }
 
 export default function NodeEditLayer({ scale }: Props) {
   const { nodeEditShapeId, snapEnabled, snapGridSize } = useUIStore()
-  const { shapes, updateShape } = useDocumentStore()
+  const { shapes, updateShape, replaceShapesWithOne, addShape } = useDocumentStore()
 
   const [selectedNodeIdx, setSelectedNodeIdx] = useState<number | null>(null)
   const [hoveredSegmentIdx, setHoveredSegmentIdx] = useState<number | null>(null)
+  const [snapTarget, setSnapTarget] = useState<{ shapeId: string; x: number; y: number } | null>(null)
 
   if (!nodeEditShapeId) return null
   const shape = shapes.find(s => s.id === nodeEditShapeId)
@@ -234,8 +236,54 @@ export default function NodeEditLayer({ scale }: Props) {
               }
               updateShape(shape.id, { data: parsed.encode(), nodeTypes: types })
             }}
-            onDragMove={onDragMove}
+            onDragMove={(e: Konva.KonvaEventObject<DragEvent>) => {
+              onDragMove(e)
+              // Weld snap: only check endpoints (first and last anchor)
+              if (nodeIdx !== 0 && nodeIdx !== anchors.length - 1) return
+              const cx2 = e.target.x(), cy2 = e.target.y()
+              const WELD_THRESHOLD = 8 / scale
+              let found: { shapeId: string; x: number; y: number } | null = null
+              for (const other of shapes) {
+                if (other.id === shape.id || other.type !== 'path') continue
+                const os = other as PathShape
+                const ocmds = new SVGPathData(os.data)
+                  .transform(SVGPathDataTransformer.TO_ABS())
+                  .transform(SVGPathDataTransformer.NORMALIZE_HVZ())
+                  .transform(SVGPathDataTransformer.NORMALIZE_ST())
+                  .commands
+                const oAnchors = ocmds.filter((c: any) =>
+                  c.type === SVGPathData.MOVE_TO || c.type === SVGPathData.LINE_TO || c.type === SVGPathData.CURVE_TO
+                )
+                const endpoints = [oAnchors[0], oAnchors[oAnchors.length - 1]]
+                const oox = os.x ?? 0, ooy = os.y ?? 0, oosx = os.scaleX ?? 1, oosy = os.scaleY ?? 1
+                for (const ep of endpoints) {
+                  if (!ep) continue
+                  const epCx = oox + (ep as any).x * oosx
+                  const epCy = ooy + (ep as any).y * oosy
+                  if (Math.hypot(cx2 - epCx, cy2 - epCy) < WELD_THRESHOLD) {
+                    found = { shapeId: other.id, x: epCx, y: epCy }
+                    e.target.x(epCx); e.target.y(epCy)
+                    break
+                  }
+                }
+                if (found) break
+              }
+              setSnapTarget(found)
+            }}
             onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
+              if (snapTarget) {
+                const other = shapes.find(sh => sh.id === snapTarget.shapeId) as PathShape | undefined
+                if (other) {
+                  const merged = weldNearestEndpoints(s.data, other.data)
+                  replaceShapesWithOne([s.id, other.id], {
+                    id: crypto.randomUUID(), type: 'path', data: merged,
+                    style: s.style, layerId: s.layerId,
+                  } as PathShape)
+                  setSnapTarget(null)
+                  return
+                }
+              }
+              setSnapTarget(null)
               const newLx = (e.target.x() - ox) / sx
               const newLy = (e.target.y() - oy) / sy
               parsed.commands[cmdIdx] = { ...parsed.commands[cmdIdx], x: newLx, y: newLy } as unknown as (typeof parsed.commands)[number]
@@ -243,6 +291,21 @@ export default function NodeEditLayer({ scale }: Props) {
             }}
           />
         ))}
+        {/* Weld snap ring */}
+        {snapTarget && (
+          <Circle
+            x={snapTarget.x} y={snapTarget.y}
+            radius={10 / scale}
+            fill="transparent"
+            stroke="#34d399" strokeWidth={1.5 / scale}
+            listening={false}
+          />
+        )}
+        <NodeEditControls
+          selectedNodeIdx={selectedNodeIdx}
+          hoveredSegmentIdx={hoveredSegmentIdx}
+          onClearSelection={() => setSelectedNodeIdx(null)}
+        />
       </Layer>
     )
   }
