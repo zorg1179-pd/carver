@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Layer, Circle, Line, Rect } from 'react-konva'
+import { Layer, Circle, Line, Rect, Path } from 'react-konva'
 import Konva from 'konva'
 import { SVGPathData, SVGPathDataTransformer } from 'svg-pathdata'
 import { useDocumentStore } from '@/stores'
 import { useUIStore } from '@/stores/useUIStore'
+import { findSegmentHit, insertNodeAt } from '@/toolpath/pathUtils'
 import type { LineShape, PathShape } from '@/types'
 
 interface Props { scale: number }
@@ -122,6 +123,35 @@ export default function NodeEditLayer({ scale }: Props) {
 
     return (
       <Layer>
+        {/* Transparent hit area for segment click / hover */}
+        <Path
+          data={s.data}
+          x={ox} y={oy}
+          scaleX={sx} scaleY={sy}
+          fill="transparent"
+          stroke="transparent"
+          strokeWidth={12 / scale}
+          hitStrokeWidth={12 / scale}
+          listening={true}
+          onMouseMove={(e: Konva.KonvaEventObject<MouseEvent>) => {
+            const stage = e.target.getStage(); if (!stage) return
+            const pos = stage.getPointerPosition(); if (!pos) return
+            const localX = (pos.x / scale - ox) / sx
+            const localY = (pos.y / scale - oy) / sy
+            const hit = findSegmentHit(s.data, localX, localY, 8 / scale)
+            setHoveredSegmentIdx(hit ? hit.segmentIdx : null)
+          }}
+          onMouseLeave={() => setHoveredSegmentIdx(null)}
+          onClick={(e: Konva.KonvaEventObject<MouseEvent>) => {
+            const stage = e.target.getStage(); if (!stage) return
+            const pos = stage.getPointerPosition(); if (!pos) return
+            const localX = (pos.x / scale - ox) / sx
+            const localY = (pos.y / scale - oy) / sy
+            const hit = findSegmentHit(s.data, localX, localY, 8 / scale)
+            if (!hit) return
+            updateShape(shape.id, { data: insertNodeAt(s.data, hit.segmentIdx, hit.t) })
+          }}
+        />
         {handles.map(h => (
           <Line
             key={`arm-${h.key}`}
@@ -216,9 +246,6 @@ export default function NodeEditLayer({ scale }: Props) {
       </Layer>
     )
   }
-
-  // hoveredSegmentIdx is used by NodeEditControls (added in Task 8)
-  void hoveredSegmentIdx
 
   return null
 }
