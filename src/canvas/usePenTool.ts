@@ -13,6 +13,7 @@ type Anchor = {
 
 const CLOSE_THRESHOLD = 6   // px in canvas space
 const DRAG_THRESHOLD  = 4   // px before a press is considered a drag
+// TODO: source from active toolbar style once a style-from-toolbar feature is added
 const DEFAULT_STYLE   = { stroke: '#e2e8f0', fill: 'transparent', strokeWidth: 0.5 }
 
 /** Euclidean distance between two points */
@@ -89,7 +90,12 @@ export function usePenTool() {
     let seg: string
     if (closePending) {
       const first = all[0]
-      seg = isLine ? `L${first.x},${first.y}` : `C${cp1.x},${cp1.y} ${first.x},${first.y} ${first.x},${first.y}`
+      // Use the backward handle of the first anchor so the preview matches what buildPathData will produce
+      const firstBwd = first.handleFwd
+        ? { x: 2 * first.x - first.handleFwd.x, y: 2 * first.y - first.handleFwd.y }
+        : { x: first.x, y: first.y }
+      const closeIsLine = isLine && firstBwd.x === first.x && firstBwd.y === first.y
+      seg = closeIsLine ? `L${first.x},${first.y}` : `C${cp1.x},${cp1.y} ${firstBwd.x},${firstBwd.y} ${first.x},${first.y}`
     } else if (liveHandle) {
       // Show bezier being shaped during drag
       const bwd = { x: 2 * pt.x - liveHandle.x, y: 2 * pt.y - liveHandle.y }
@@ -99,6 +105,7 @@ export function usePenTool() {
     }
 
     const data = buildPathData(all) + ' ' + seg
+    // '__preview__' is a reserved sentinel id — excluded from selection and shape counts
     setPreviewShape({ id: '__preview__', type: 'path', data, style: DEFAULT_STYLE } as PathShape)
   }, [])
 
@@ -130,7 +137,7 @@ export function usePenTool() {
       return
     }
     const data = buildPathData(all) + (close ? ' Z' : '')
-    const nodeTypes = all.map(a => a.handleFwd ? 'smooth' : 'corner') as ('smooth'|'corner')[]
+    const nodeTypes = all.map((a): 'smooth' | 'corner' => a.handleFwd ? 'smooth' : 'corner')
     const shape: PathShape = {
       id: crypto.randomUUID(), type: 'path', data, nodeTypes, style: DEFAULT_STYLE,
     }
@@ -162,6 +169,8 @@ export function usePenTool() {
       const first = anchors.current[0]
       if (anchors.current.length >= 2 && dist(pt, first) < CLOSE_THRESHOLD) {
         commit(true)
+        // The caller's onPointerUp will still arrive after this early return — it is
+        // safely ignored because commit() clears anchors and pressing refs.
         return
       }
       anchors.current = [...anchors.current, { x: pt.x, y: pt.y, handleFwd: null }]
